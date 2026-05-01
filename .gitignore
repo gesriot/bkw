@@ -1,0 +1,49 @@
+# Python build artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.eggs/
+
+# pip / packaging
+build/
+dist/
+.installed.files
+*.whl
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Test artifacts
+.pytest_cache/
+.pytest_tmp/
+*.tmp/
+userbkw_legacy_cli_*/
+ui_e2e_*/
+
+# Nuitka / uv build caches
+.build-venv/
+.nuitka-cache/
+.uv-cache/
+.mplconfig/
+
+# Runtime output (not source)
+bkw_ui/logs/
+bkw_ui/projects/
+bkw_ui/tdf_engine/tdf.out
+bkw_ui/tdf_engine/scoef
+bkw_ui/tdf_engine/plots/
+*.out
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
