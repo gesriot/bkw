@@ -13,9 +13,20 @@ def _is_frozen() -> bool:
     return "__compiled__" in globals() or bool(getattr(sys, "frozen", False))
 
 
+def _home() -> Path:
+    # On POSIX (incl. macOS) honor $HOME explicitly; Path.home() on Windows
+    # ignores HOME and reads USERPROFILE, which breaks tests that simulate
+    # darwin while running on Windows.
+    if sys.platform != "win32":
+        env_home = os.environ.get("HOME")
+        if env_home:
+            return Path(env_home)
+    return Path.home()
+
+
 def _user_data_root() -> Path:
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Application Support" / APP_NAME
+        return _home() / "Library" / "Application Support" / APP_NAME
     if sys.platform == "win32":
         base = Path(
             os.environ.get("LOCALAPPDATA")
@@ -23,11 +34,11 @@ def _user_data_root() -> Path:
             or Path.home() / "AppData" / "Local"
         )
         return base / APP_NAME
-    return Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / APP_NAME
+    return Path(os.environ.get("XDG_DATA_HOME", _home() / ".local" / "share")) / APP_NAME
 
 
 def _user_projects_dir() -> Path:
-    return Path.home() / "Documents" / APP_NAME
+    return _home() / "Documents" / APP_NAME
 
 
 if _is_frozen():
