@@ -65,7 +65,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: bkw-windows-exe
-          path: dist/windows/BKW.exe
+          path: dist/windows/BKW-*-windows-x64.exe
+          if-no-files-found: error
 
   linux:
     name: Linux tarball
