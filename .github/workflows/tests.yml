@@ -59,15 +59,15 @@ jobs:
           QT_API: pyside6
           QT_QPA_PLATFORM: offscreen
           MPLCONFIGDIR: ${{ runner.temp }}/matplotlib
-        run: |
-          uv run --locked pytest \
-            tests/test_paths.py \
-            tests/test_stage6_userbkw_cli.py \
-            tests/test_stage6_userbkw_complex.py \
-            tests/test_stage6_userbkw_legacy_cli_noninteractive.py \
-            tests/test_stage6_userbkw_legacy_p01.py \
-            tests/test_stage6_userbkw_legacy_p3b.py \
-            tests/test_stage6_userbkw_legacy_p56.py \
-            tests/test_stage6_userbkw_menu_exotic.py \
-            tests/test_stage6_userbkw_mix.py \
-            tests/test_ui_graphs_resilience.py
+        run: >
+          uv run --locked pytest
+          tests/test_paths.py
+          tests/test_stage6_userbkw_cli.py
+          tests/test_stage6_userbkw_complex.py
+          tests/test_stage6_userbkw_legacy_cli_noninteractive.py
+          tests/test_stage6_userbkw_legacy_p01.py
+          tests/test_stage6_userbkw_legacy_p3b.py
+          tests/test_stage6_userbkw_legacy_p56.py
+          tests/test_stage6_userbkw_menu_exotic.py
+          tests/test_stage6_userbkw_mix.py
+          tests/test_ui_graphs_resilience.py
