@@ -38,8 +38,10 @@ NUITKA_ARGS=(
   --include-package=bkw_py
   --include-package=bkw_ui_app
   --include-package=pyqtgraph
+  --include-package=numpy
   --include-package-data=bkw_py
   --include-package-data=pyqtgraph
+  --include-package-data=numpy
   --include-data-dir="$ROOT_DIR/bkw_ui/tdf_engine=tdf_engine"
   --assume-yes-for-downloads
   --lto="$LTO"

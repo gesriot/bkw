@@ -412,12 +412,12 @@ class MainWindow(QMainWindow):
             self.btn_graph_prev.clicked.connect(self._on_graph_prev)
             self.btn_graph_next.clicked.connect(self._on_graph_next)
             self._set_result_graphs([])
-        except Exception:
+        except Exception as exc:
             self.pg = None
             self.graph_widgets = []
             self.graph_meta = []
             self.graph_container = None
-            lay.addWidget(QLabel("pyqtgraph не установлен. Графики недоступны."))
+            lay.addWidget(QLabel(f"pyqtgraph недоступен ({type(exc).__name__}: {exc}). Графики недоступны."))
 
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
@@ -553,9 +553,9 @@ class MainWindow(QMainWindow):
             self.tdf_plot = pg.PlotWidget()
             self.tdf_plot.setBackground("#1e1e1e")
             lay.addWidget(self.tdf_plot, 5)
-        except Exception:
+        except Exception as exc:
             self.tdf_plot = None
-            lay.addWidget(QLabel("pyqtgraph не установлен. Нативные TDF-графики недоступны."))
+            lay.addWidget(QLabel(f"pyqtgraph недоступен ({type(exc).__name__}: {exc}). Нативные TDF-графики недоступны."))
 
         self.tdf_log = QPlainTextEdit()
         self.tdf_log.setReadOnly(True)
