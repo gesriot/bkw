@@ -14,11 +14,15 @@ from typing import Callable
 from bkw_py._cancel import CancelledError
 
 try:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    # Use the OO API directly instead of pyplot: pyplot's global figure manager
+    # is not thread-safe and, in a process that already imported PyQt, may
+    # select a Qt-based backend whose callback registry blows up on close()
+    # from a worker thread (KeyError ('button_press_event', _StrongRef ...)).
+    from matplotlib.figure import Figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
 except Exception:
-    plt = None
+    Figure = None
+    FigureCanvasAgg = None
 
 
 def parse_reference_float(s: str) -> float:
@@ -219,11 +223,13 @@ def sanitize_label(label: str) -> str:
 
 
 def save_plot(out_dir: Path, name: str, x, y, xlabel: str, ylabel: str, title: str, indg: int):
-    if plt is None:
+    if Figure is None or FigureCanvasAgg is None:
         return
 
     figsize = (8.0, 6.0) if indg == 0 else (13.7, 10.0)
-    fig, ax = plt.subplots(figsize=figsize)
+    fig = Figure(figsize=figsize)
+    FigureCanvasAgg(fig)
+    ax = fig.add_subplot(1, 1, 1)
     ax.plot(x, y, marker="o", markersize=2.5, linewidth=1.0)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
@@ -231,7 +237,6 @@ def save_plot(out_dir: Path, name: str, x, y, xlabel: str, ylabel: str, title: s
     ax.grid(True, linestyle=":", linewidth=0.5)
     fig.tight_layout()
     fig.savefig(out_dir / f"{name}.png", dpi=150)
-    plt.close(fig)
 
 
 def write_common_output(fout, fscoef, label72, itp, temp, fo, soft, so, sic, xa, fa, ha, sigma, stt, cv=None, da=None):
@@ -709,7 +714,7 @@ def run(
 
     msg = (
         "TDF complete. Matplotlib unavailable; png plots were not generated."
-        if plt is None
+        if Figure is None
         else "TDF complete. Output written to tdf.out, scoef, and plots/*.png"
     )
     if on_log is not None:
