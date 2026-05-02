@@ -16,8 +16,8 @@ Thermochemical toolkit covering detonation parameters (Becker–Kistiakowsky–W
 
 | Component | Docs |
 |---|---|
-| Python calculation package (`bkw`, `ispbkw`, `userbkw`, `tdf` CLIs) | [`bkw_py/README.md`](./bkw_py/README.md) ([RU](./bkw_py/README_RU.md)) |
-| Desktop application (PySide6 + pyqtgraph, Nuitka builds) | [`bkw_ui/README.md`](./bkw_ui/README.md) ([RU](./bkw_ui/README_RU.md)) |
+| Python calculation package (`bkw`, `ispbkw`, `userbkw`, `tdf` CLIs) | [`bkw_py/README.md`](./bkw_py/README.md) |
+| Desktop application (PySide6 + pyqtgraph, Nuitka builds) | [`bkw_ui/README.md`](./bkw_ui/README.md) |
 
 ## Origins and attribution
 
