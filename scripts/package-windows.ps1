@@ -43,6 +43,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 $IconPath = Join-Path $RootDir "dist/icons/$ProductName.ico"
 $ExePath = Join-Path $OutputPath "$ProductName.exe"
+$VersionedExeName = "$ProductName-$Version-windows-x64.exe"
+$VersionedExePath = Join-Path $OutputPath $VersionedExeName
 $ZipPath = Join-Path $RootDir "dist/$ProductName-$Version-windows-x64.zip"
 
 Write-Host "==> Installing runtime dependencies into build environment"
@@ -61,7 +63,7 @@ if (Test-Path "icon.png") {
 }
 
 Write-Host "==> Removing previous Windows build output"
-Remove-Item -Recurse -Force "$OutputPath/main.dist", "$OutputPath/main.build", "$OutputPath/main.onefile-build", "$OutputPath/$ProductName.dist", $ExePath, $ZipPath -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$OutputPath/main.dist", "$OutputPath/main.build", "$OutputPath/main.onefile-build", "$OutputPath/$ProductName.dist", $ExePath, $VersionedExePath, $ZipPath -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $OutputPath | Out-Null
 
 $NuitkaArgs = @(
@@ -109,8 +111,11 @@ if ($Mode -eq "standalone") {
     }
     Write-Host "==> Creating ZIP artifact"
     Compress-Archive -Path "$RenamedDist" -DestinationPath $ZipPath -Force
-} elseif (-not (Test-Path $ExePath)) {
-    throw "Expected onefile executable was not created: $ExePath"
+} else {
+    if (-not (Test-Path $ExePath)) {
+        throw "Expected onefile executable was not created: $ExePath"
+    }
+    Move-Item -Path $ExePath -Destination $VersionedExePath -Force
 }
 
 Write-Host "==> Done"
@@ -118,5 +123,5 @@ if ($Mode -eq "standalone") {
     Write-Host "Dist: $OutputPath/$ProductName.dist"
     Write-Host "ZIP:  $ZipPath"
 } else {
-    Write-Host "EXE:  $ExePath"
+    Write-Host "EXE:  $VersionedExePath"
 }
