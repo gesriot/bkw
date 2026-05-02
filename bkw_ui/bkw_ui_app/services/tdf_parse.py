@@ -18,6 +18,17 @@ class TdfCurve:
     y: list[float]
 
 
+def _sanitize_plot_label(label: str) -> str:
+    keep = []
+    for ch in label.strip():
+        if ch.isalnum() or ch in ("-", "_"):
+            keep.append(ch)
+        elif ch.isspace():
+            keep.append("_")
+    out = "".join(keep).strip("_")
+    return out if out else "material"
+
+
 def _line_material(line: str) -> str | None:
     if not line.startswith("1"):
         return None
@@ -88,3 +99,37 @@ def parse_tdf_out(path: str | Path) -> list[TdfCurve]:
         i += 1
 
     return curves
+
+
+def tdf_plot_image_paths(tdf_out_path: str | Path, curves: list[TdfCurve]) -> list[Path | None]:
+    """Return generated PNG plot paths matching ``parse_tdf_out`` curve order."""
+    plots_dir = Path(tdf_out_path).parent / "plots"
+    suffix_by_metric = {
+        "Free energy": "free_energy",
+        "Enthalpy": "enthalpy",
+        "Entropy": "entropy",
+        "Heat capacity": "heat_capacity",
+    }
+
+    paths: list[Path | None] = []
+    problem_idx = 0
+    current_material = ""
+    for curve in curves:
+        material, sep, metric = curve.title.partition(" | ")
+        if not sep:
+            paths.append(None)
+            continue
+
+        if metric == "Free energy" or material != current_material:
+            problem_idx += 1
+            current_material = material
+
+        suffix = suffix_by_metric.get(metric)
+        if suffix is None:
+            paths.append(None)
+            continue
+
+        image_path = plots_dir / f"{problem_idx:03d}_{_sanitize_plot_label(material)}_{suffix}.png"
+        paths.append(image_path if image_path.exists() else None)
+
+    return paths

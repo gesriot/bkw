@@ -11,7 +11,7 @@ from pathlib import Path
 
 from bkw_py.ui.userbkw import run_cli as userbkw_run_cli
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot, Qt, QTimer
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush, QColor, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QPlainTextEdit,
     QProgressBar,
+    QScrollArea,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -38,7 +39,7 @@ from ..services.calc_runner import CalcRunner
 from ..services.data_service import list_templates
 from ..services.output_parse import BkwTables, IspPoint, parse_bkw_tables, parse_isp_summary
 from ..services.project_service import load_project, save_project
-from ..services.tdf_parse import TdfCurve, parse_tdf_out
+from ..services.tdf_parse import TdfCurve, parse_tdf_out, tdf_plot_image_paths
 from ..services.tdf_runner import TdfRunner
 from ..services.tdf_structured import TdfDeck, TdfMaterial, parse_tdfdata_text, render_tdfdata_text, validate_tdf_deck
 
@@ -547,6 +548,8 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.tdf_status)
 
         self.tdf_curves: list[TdfCurve] = []
+        self.tdf_plot_images: list[Path | None] = []
+        self.tdf_plot_label = None
         try:
             import pyqtgraph as pg
 
@@ -555,7 +558,14 @@ class MainWindow(QMainWindow):
             lay.addWidget(self.tdf_plot, 5)
         except Exception as exc:
             self.tdf_plot = None
-            lay.addWidget(QLabel(f"pyqtgraph недоступен ({type(exc).__name__}: {exc}). Нативные TDF-графики недоступны."))
+            self.tdf_plot_label = QLabel(f"pyqtgraph недоступен ({type(exc).__name__}: {exc}). Будут показаны PNG-графики из TDF.")
+            self.tdf_plot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.tdf_plot_label.setMinimumHeight(280)
+            self.tdf_plot_label.setWordWrap(True)
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(self.tdf_plot_label)
+            lay.addWidget(scroll, 5)
 
         self.tdf_log = QPlainTextEdit()
         self.tdf_log.setReadOnly(True)
@@ -1562,8 +1572,10 @@ class MainWindow(QMainWindow):
         self.tdf_curve_picker.blockSignals(True)
         self.tdf_curve_picker.clear()
         self.tdf_curves = []
+        self.tdf_plot_images = []
         if out.exists():
             self.tdf_curves = parse_tdf_out(out)
+            self.tdf_plot_images = tdf_plot_image_paths(out, self.tdf_curves)
             for i, c in enumerate(self.tdf_curves):
                 self.tdf_curve_picker.addItem(f"{i+1:02d}. {c.title}", i)
         self.tdf_curve_picker.blockSignals(False)
@@ -1574,6 +1586,9 @@ class MainWindow(QMainWindow):
             self.tdf_status.setText("TDF: нет кривых. Нажмите 'Запустить TDF'.")
             if self.tdf_plot:
                 self.tdf_plot.clear()
+            if self.tdf_plot_label:
+                self.tdf_plot_label.setPixmap(QPixmap())
+                self.tdf_plot_label.setText("PNG-графики TDF не найдены. Нажмите 'Запустить TDF'.")
 
     def _load_tdf_input_from_engine(self) -> None:
         src = self._tdf_input_path()
@@ -1740,15 +1755,34 @@ class MainWindow(QMainWindow):
     def _show_tdf_curve(self, idx: int) -> None:
         if idx < 0 or idx >= len(self.tdf_curves):
             return
-        if not self.tdf_plot:
-            return
         c = self.tdf_curves[idx]
-        self.tdf_plot.clear()
-        self.tdf_plot.setTitle(c.title)
-        self.tdf_plot.setLabel("bottom", c.xlabel)
-        self.tdf_plot.setLabel("left", c.ylabel)
-        self.tdf_plot.plot(c.x, c.y, pen="y")
-        self.tdf_status.setText(f"TDF кривая {idx+1}/{len(self.tdf_curves)}: {c.title}")
+        if self.tdf_plot:
+            self.tdf_plot.clear()
+            self.tdf_plot.setTitle(c.title)
+            self.tdf_plot.setLabel("bottom", c.xlabel)
+            self.tdf_plot.setLabel("left", c.ylabel)
+            self.tdf_plot.plot(c.x, c.y, pen="y")
+            self.tdf_status.setText(f"TDF кривая {idx+1}/{len(self.tdf_curves)}: {c.title}")
+        elif self.tdf_plot_label:
+            image_path = self.tdf_plot_images[idx] if idx < len(self.tdf_plot_images) else None
+            if image_path is None:
+                self.tdf_plot_label.setPixmap(QPixmap())
+                self.tdf_plot_label.setText(f"PNG-график для кривой не найден: {c.title}")
+            else:
+                pixmap = QPixmap(str(image_path))
+                if pixmap.isNull():
+                    self.tdf_plot_label.setPixmap(QPixmap())
+                    self.tdf_plot_label.setText(f"Не удалось открыть PNG-график: {image_path}")
+                else:
+                    self.tdf_plot_label.setText("")
+                    self.tdf_plot_label.setPixmap(
+                        pixmap.scaled(
+                            self.tdf_plot_label.size(),
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation,
+                        )
+                    )
+            self.tdf_status.setText(f"TDF PNG {idx+1}/{len(self.tdf_curves)}: {c.title}")
 
     def _on_tdf_curve_changed(self, idx: int) -> None:
         self._show_tdf_curve(idx)
