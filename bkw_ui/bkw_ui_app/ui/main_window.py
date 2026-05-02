@@ -11,7 +11,7 @@ from pathlib import Path
 
 from bkw_py.ui.userbkw import run_cli as userbkw_run_cli
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal, Slot, Qt, QTimer
-from PySide6.QtGui import QBrush, QColor, QPixmap
+from PySide6.QtGui import QAction, QActionGroup, QBrush, QColor, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..i18n import i18n, t
+from ..i18n.strings import LANGUAGE_NAMES, SUPPORTED_LANGUAGES
 from ..models import BkwProject, MixItem
 from ..paths import PROJECTS_DIR, RUNTIME_ROOT, TDF_ENGINE_DIR
 from ..services.calc_runner import CalcRunner
@@ -114,6 +116,9 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("BKW")
         self.resize(1200, 760)
 
+        self._tr_setters: list = []
+        self._dyn_status: dict[int, tuple] = {}
+
         self.thread_pool = QThreadPool.globalInstance()
         self.runner = CalcRunner()
         self.tdf_runner = TdfRunner()
@@ -135,13 +140,15 @@ class MainWindow(QMainWindow):
         self.tab_export = QWidget()
         self.tab_tdf = QWidget()
 
-        self.tabs.addTab(self.tab_project, "1. Проект")
-        self.tabs.addTab(self.tab_mix, "2. Смесь")
-        self.tabs.addTab(self.tab_species, "3. Species")
-        self.tabs.addTab(self.tab_calc, "4. Расчет")
-        self.tabs.addTab(self.tab_results, "5. Результаты")
-        self.tabs.addTab(self.tab_export, "6. Экспорт")
-        self.tabs.addTab(self.tab_tdf, "7. TDF")
+        self.tabs.addTab(self.tab_project, "")
+        self.tabs.addTab(self.tab_mix, "")
+        self.tabs.addTab(self.tab_species, "")
+        self.tabs.addTab(self.tab_calc, "")
+        self.tabs.addTab(self.tab_results, "")
+        self.tabs.addTab(self.tab_export, "")
+        self.tabs.addTab(self.tab_tdf, "")
+
+        self._build_language_menu()
 
         self._build_project_tab()
         self._build_mix_tab()
@@ -156,6 +163,120 @@ class MainWindow(QMainWindow):
         self._refresh_flow_state()
         self._load_tdf_curves()
 
+        i18n.language_changed.connect(self._retranslate)
+        self._retranslate()
+
+    def _tr_label(self, key: str) -> QLabel:
+        lbl = QLabel()
+        self._tr_setters.append(lambda l=lbl, k=key: l.setText(t(k)))
+        return lbl
+
+    def _tr_button(self, key: str) -> QPushButton:
+        btn = QPushButton()
+        self._tr_setters.append(lambda b=btn, k=key: b.setText(t(k)))
+        return btn
+
+    def _tr_set_text(self, widget, key: str) -> None:
+        self._tr_setters.append(lambda w=widget, k=key: w.setText(t(k)))
+
+    def _tr_set_placeholder(self, widget, key: str) -> None:
+        self._tr_setters.append(lambda w=widget, k=key: w.setPlaceholderText(t(k)))
+
+    def _tr_set_tooltip(self, widget, key: str) -> None:
+        self._tr_setters.append(lambda w=widget, k=key: w.setToolTip(t(k)))
+
+    def _tr_set_header_labels(self, table, keys: list[str]) -> None:
+        self._tr_setters.append(lambda tbl=table, ks=tuple(keys): tbl.setHorizontalHeaderLabels([t(k) for k in ks]))
+
+    def _status_text(self, key: str, kwargs: dict) -> str:
+        fmt_kwargs = dict(kwargs)
+        phase_key = fmt_kwargs.pop("phase_key", None)
+        if phase_key is not None:
+            fmt_kwargs["phase"] = t(str(phase_key))
+        return t(key, **fmt_kwargs)
+
+    def _set_status(self, widget, key: str, **kwargs) -> None:
+        self._dyn_status[id(widget)] = (widget, key, kwargs)
+        widget.setText(self._status_text(key, kwargs))
+
+    def _ask_yes_no(self, title_key: str, message_key: str, *, default_yes: bool = True) -> bool:
+        buttons = QMessageBox.Yes | QMessageBox.No
+        default_button = QMessageBox.Yes if default_yes else QMessageBox.No
+        if i18n.language() == "en":
+            return QMessageBox.question(self, t(title_key), t(message_key), buttons, default_button) == QMessageBox.Yes
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle(t(title_key))
+        box.setText(t(message_key))
+        yes_button = box.addButton(t("common.yes"), QMessageBox.ButtonRole.YesRole)
+        no_button = box.addButton(t("common.no"), QMessageBox.ButtonRole.NoRole)
+        box.setDefaultButton(yes_button if default_yes else no_button)
+        box.exec()
+        return box.clickedButton() == yes_button
+
+    def _build_language_menu(self) -> None:
+        self._lang_menu = self.menuBar().addMenu("")
+        self._lang_action_group = QActionGroup(self)
+        self._lang_action_group.setExclusive(True)
+        self._lang_actions: dict[str, QAction] = {}
+        for code in SUPPORTED_LANGUAGES:
+            action = QAction(LANGUAGE_NAMES[code], self)
+            action.setCheckable(True)
+            action.setChecked(code == i18n.language())
+            action.triggered.connect(lambda _checked=False, c=code: i18n.set_language(c))
+            self._lang_action_group.addAction(action)
+            self._lang_menu.addAction(action)
+            self._lang_actions[code] = action
+
+    def _retranslate(self) -> None:
+        self._lang_menu.setTitle(t("menu.language"))
+        self.tabs.setTabText(0, t("tab.project"))
+        self.tabs.setTabText(1, t("tab.mix"))
+        self.tabs.setTabText(2, t("tab.species"))
+        self.tabs.setTabText(3, t("tab.calc"))
+        self.tabs.setTabText(4, t("tab.results"))
+        self.tabs.setTabText(5, t("tab.export"))
+        self.tabs.setTabText(6, t("tab.tdf"))
+        for setter in self._tr_setters:
+            setter()
+        for w, key, kwargs in self._dyn_status.values():
+            w.setText(self._status_text(key, kwargs))
+        if hasattr(self, "source_mode_combo"):
+            self._retranslate_source_mode_combo()
+        current = i18n.language()
+        for code, action in self._lang_actions.items():
+            if action.isChecked() != (code == current):
+                action.setChecked(code == current)
+        self._refresh_project_info()
+        if getattr(self, "graph_container", None) is not None and (
+            (self.last_bkw_tables and (self.last_bkw_tables.hugoniot or self.last_bkw_tables.isentrope))
+            or self.last_isp_points
+        ):
+            self._load_result_graphs()
+        self._update_graph_title()
+        self._refresh_tdf_curve_picker_labels()
+
+    def _retranslate_source_mode_combo(self) -> None:
+        combo = self.source_mode_combo
+        combo.blockSignals(True)
+        for i in range(combo.count()):
+            data = combo.itemData(i)
+            if data == "template":
+                combo.setItemText(i, t("project.source.template"))
+            elif data == "import":
+                combo.setItemText(i, t("project.source.import"))
+        combo.blockSignals(False)
+
+    def _refresh_tdf_curve_picker_labels(self) -> None:
+        combo = getattr(self, "tdf_curve_picker", None)
+        if combo is None or not getattr(self, "tdf_curves", None):
+            return
+        combo.blockSignals(True)
+        for i, c in enumerate(self.tdf_curves):
+            combo.setItemText(i, f"{i+1:02d}. {c.title}")
+        combo.blockSignals(False)
+
     def _on_tab_changed(self, idx: int) -> None:
         # Refresh results from disk when user opens the tab to avoid stale/incomplete UI state.
         if idx == 4 and self.project.last_output_report:
@@ -169,13 +290,14 @@ class MainWindow(QMainWindow):
         lay.addLayout(grid)
 
         self.project_name = QLineEdit(self.project.name)
-        grid.addWidget(QLabel("Имя проекта"), 0, 0)
+        grid.addWidget(self._tr_label("project.name_label"), 0, 0)
         grid.addWidget(self.project_name, 0, 1)
 
         self.source_mode_combo = QComboBox()
-        self.source_mode_combo.addItems(["template", "import"])
-        self.source_mode_combo.setCurrentText(self.project.source_mode)
-        grid.addWidget(QLabel("Источник входа"), 1, 0)
+        self.source_mode_combo.addItem(t("project.source.template"), "template")
+        self.source_mode_combo.addItem(t("project.source.import"), "import")
+        self._combo_set_by_data(self.source_mode_combo, self.project.source_mode)
+        grid.addWidget(self._tr_label("project.source_label"), 1, 0)
         grid.addWidget(self.source_mode_combo, 1, 1)
 
         self.template_combo = QComboBox()
@@ -183,36 +305,36 @@ class MainWindow(QMainWindow):
         idx = self.template_combo.findText(self.project.template)
         if idx >= 0:
             self.template_combo.setCurrentIndex(idx)
-        grid.addWidget(QLabel("Шаблон BKWDATA"), 2, 0)
+        grid.addWidget(self._tr_label("project.template_label"), 2, 0)
         grid.addWidget(self.template_combo, 2, 1)
 
         self.input_bkwdata_edit = QLineEdit("")
-        self.btn_pick_bkwdata = QPushButton("Импорт BKWDATA...")
+        self.btn_pick_bkwdata = self._tr_button("project.btn_import")
         r = QHBoxLayout()
         r.addWidget(self.input_bkwdata_edit)
         r.addWidget(self.btn_pick_bkwdata)
-        grid.addWidget(QLabel("Входной BKWDATA"), 3, 0)
+        grid.addWidget(self._tr_label("project.input_label"), 3, 0)
         grid.addLayout(r, 3, 1)
 
         self.legacy_ioeq_combo = QComboBox()
         self.legacy_ioeq_combo.addItem("inherit", None)
         self.legacy_ioeq_combo.addItem("equilibrium (0)", 0)
         self.legacy_ioeq_combo.addItem("frozen (1)", 1)
-        grid.addWidget(QLabel("Legacy page1: ioeq"), 4, 0)
+        grid.addWidget(self._tr_label("project.legacy_ioeq"), 4, 0)
         grid.addWidget(self.legacy_ioeq_combo, 4, 1)
 
         self.legacy_icjc_combo = QComboBox()
         self.legacy_icjc_combo.addItem("inherit", None)
         self.legacy_icjc_combo.addItem("on (1)", 1)
         self.legacy_icjc_combo.addItem("off (0)", 0)
-        grid.addWidget(QLabel("Legacy page1: icjc"), 5, 0)
+        grid.addWidget(self._tr_label("project.legacy_icjc"), 5, 0)
         grid.addWidget(self.legacy_icjc_combo, 5, 1)
 
         self.legacy_ihug_combo = QComboBox()
         self.legacy_ihug_combo.addItem("inherit", None)
         self.legacy_ihug_combo.addItem("on (1)", 1)
         self.legacy_ihug_combo.addItem("off (0)", 0)
-        grid.addWidget(QLabel("Legacy page1: ihug"), 6, 0)
+        grid.addWidget(self._tr_label("project.legacy_ihug"), 6, 0)
         grid.addWidget(self.legacy_ihug_combo, 6, 1)
 
         self.legacy_ipvc_combo = QComboBox()
@@ -221,25 +343,25 @@ class MainWindow(QMainWindow):
         self.legacy_ipvc_combo.addItem("through C-J (1)", 1)
         self.legacy_ipvc_combo.addItem("through Hugoniot P input (2)", 2)
         self.legacy_ipvc_combo.addItem("through T/P input (3)", 3)
-        grid.addWidget(QLabel("Legacy page1: ipvc"), 7, 0)
+        grid.addWidget(self._tr_label("project.legacy_ipvc"), 7, 0)
         grid.addWidget(self.legacy_ipvc_combo, 7, 1)
 
         self.legacy_igrp_combo = QComboBox()
         self.legacy_igrp_combo.addItem("inherit", None)
         self.legacy_igrp_combo.addItem("graph off (1)", 1)
         self.legacy_igrp_combo.addItem("graph on (2)", 2)
-        grid.addWidget(QLabel("Legacy page1: igrp"), 8, 0)
+        grid.addWidget(self._tr_label("project.legacy_igrp"), 8, 0)
         grid.addWidget(self.legacy_igrp_combo, 8, 1)
 
         self.legacy_eos_preset_combo = QComboBox()
         self.legacy_eos_preset_combo.addItems(["default", "rdx", "tnt"])
-        grid.addWidget(QLabel("Legacy page2: EOS preset"), 9, 0)
+        grid.addWidget(self._tr_label("project.legacy_eos_preset"), 9, 0)
         grid.addWidget(self.legacy_eos_preset_combo, 9, 1)
 
         row = QHBoxLayout()
-        self.btn_new_project = QPushButton("Новый проект")
-        self.btn_load_project = QPushButton("Открыть .bkwproj.json")
-        self.btn_save_project = QPushButton("Сохранить .bkwproj.json")
+        self.btn_new_project = self._tr_button("project.btn_new")
+        self.btn_load_project = self._tr_button("project.btn_load")
+        self.btn_save_project = self._tr_button("project.btn_save")
         row.addWidget(self.btn_new_project)
         row.addWidget(self.btn_load_project)
         row.addWidget(self.btn_save_project)
@@ -249,7 +371,7 @@ class MainWindow(QMainWindow):
         lay.addWidget(self.project_info)
         lay.addStretch(1)
 
-        self.source_mode_combo.currentTextChanged.connect(self._on_source_mode_changed)
+        self.source_mode_combo.currentIndexChanged.connect(self._on_source_mode_changed)
         self.template_combo.currentTextChanged.connect(self._on_template_changed)
         self.project_name.textChanged.connect(self._on_project_name_changed)
         self.btn_pick_bkwdata.clicked.connect(self._on_pick_bkwdata)
@@ -265,22 +387,23 @@ class MainWindow(QMainWindow):
         self.mix_basis = QComboBox()
         self.mix_basis.addItems(["wt", "mol"])
         self.mix_basis.setCurrentText(self.project.mix_basis)
-        self.mix_strict = QCheckBox("Строго по элементам")
+        self.mix_strict = QCheckBox()
+        self._tr_set_text(self.mix_strict, "mix.strict_checkbox")
         self.mix_strict.setChecked(self.project.strict_elements)
-        head.addWidget(QLabel("База"))
+        head.addWidget(self._tr_label("mix.basis_label"))
         head.addWidget(self.mix_basis)
         head.addWidget(self.mix_strict)
         head.addStretch(1)
         lay.addLayout(head)
 
         self.mix_table = QTableWidget(0, 2)
-        self.mix_table.setHorizontalHeaderLabels(["Компонент", "Значение"])
+        self._tr_set_header_labels(self.mix_table, ["mix.col_component", "mix.col_value"])
         lay.addWidget(self.mix_table)
 
         row = QHBoxLayout()
-        self.btn_mix_add = QPushButton("Добавить строку")
-        self.btn_mix_remove = QPushButton("Удалить строку")
-        self.btn_mix_apply = QPushButton("Применить в проект")
+        self.btn_mix_add = self._tr_button("mix.btn_add")
+        self.btn_mix_remove = self._tr_button("mix.btn_remove")
+        self.btn_mix_apply = self._tr_button("mix.btn_apply")
         row.addWidget(self.btn_mix_add)
         row.addWidget(self.btn_mix_remove)
         row.addWidget(self.btn_mix_apply)
@@ -300,48 +423,48 @@ class MainWindow(QMainWindow):
         self.solid_db_edit = QLineEdit()
         self.gas_custom_edit = QPlainTextEdit()
         self.solid_custom_edit = QPlainTextEdit()
-        self.gas_db_edit.setPlaceholderText("например: no,hcl,co2")
-        self.solid_db_edit.setPlaceholderText("например: sol c,al2o3")
-        self.gas_custom_edit.setPlaceholderText("name|8therc|el=val,el=val")
-        self.solid_custom_edit.setPlaceholderText("name|8therc|12soleq|el=val,el=val")
+        self._tr_set_placeholder(self.gas_db_edit, "species.gas_db_placeholder")
+        self._tr_set_placeholder(self.solid_db_edit, "species.solid_db_placeholder")
+        self._tr_set_placeholder(self.gas_custom_edit, "species.gas_custom_placeholder")
+        self._tr_set_placeholder(self.solid_custom_edit, "species.solid_custom_placeholder")
 
-        lay.addWidget(QLabel("Add gas db (через запятую):"))
+        lay.addWidget(self._tr_label("species.gas_db_label"))
         lay.addWidget(self.gas_db_edit)
-        lay.addWidget(QLabel("Add solid db (через запятую):"))
+        lay.addWidget(self._tr_label("species.solid_db_label"))
         lay.addWidget(self.solid_db_edit)
 
-        lay.addWidget(QLabel("Add gas custom (по строкам, формат name|8therc|el=val,...):"))
+        lay.addWidget(self._tr_label("species.gas_custom_label"))
         lay.addWidget(self.gas_custom_edit)
-        lay.addWidget(QLabel("Add solid custom (по строкам, формат name|8therc|12soleq|el=val,...):"))
+        lay.addWidget(self._tr_label("species.solid_custom_label"))
         lay.addWidget(self.solid_custom_edit)
 
-        lay.addWidget(QLabel("Legacy page5: athrho (через запятую, до 4 значений):"))
+        lay.addWidget(self._tr_label("species.legacy_athrho_label"))
         self.legacy_athrho_edit = QLineEdit()
-        self.legacy_athrho_edit.setPlaceholderText("например: 1.7,1.8")
-        self.legacy_athrho_edit.setToolTip("Формат: n1,n2,n3,n4 (до 4 чисел). Пример: 1.70,1.85")
+        self._tr_set_placeholder(self.legacy_athrho_edit, "species.legacy_athrho_placeholder")
+        self._tr_set_tooltip(self.legacy_athrho_edit, "species.legacy_athrho_tooltip")
         lay.addWidget(self.legacy_athrho_edit)
-        lay.addWidget(QLabel("Legacy page5: aispr (используется при ipvc=2):"))
+        lay.addWidget(self._tr_label("species.legacy_aispr_label"))
         self.legacy_aispr_edit = QLineEdit()
-        self.legacy_aispr_edit.setPlaceholderText("например: 0.30")
-        self.legacy_aispr_edit.setToolTip("Одно число. Используется, если ipvc=2.")
+        self._tr_set_placeholder(self.legacy_aispr_edit, "species.legacy_aispr_placeholder")
+        self._tr_set_tooltip(self.legacy_aispr_edit, "species.legacy_aispr_tooltip")
         lay.addWidget(self.legacy_aispr_edit)
 
-        lay.addWidget(QLabel("Legacy page6 constants (по строкам no=val, 1..30):"))
+        lay.addWidget(self._tr_label("species.legacy_constants_label"))
         self.legacy_constants_edit = QPlainTextEdit()
-        self.legacy_constants_edit.setPlaceholderText("например:\n29=1.25\n1=-1")
-        self.legacy_constants_edit.setToolTip("Каждая строка: no=val. Значение -1 восстанавливает исходную константу.")
+        self._tr_set_placeholder(self.legacy_constants_edit, "species.legacy_constants_placeholder")
+        self._tr_set_tooltip(self.legacy_constants_edit, "species.legacy_constants_tooltip")
         self.legacy_constants_edit.setMaximumHeight(90)
         lay.addWidget(self.legacy_constants_edit)
 
-        lay.addWidget(QLabel("Legacy page3b twin для solid (по строкам old=new):"))
+        lay.addWidget(self._tr_label("species.legacy_twins_label"))
         self.legacy_twins_edit = QPlainTextEdit()
-        self.legacy_twins_edit.setPlaceholderText("например:\nsol c=graph")
-        self.legacy_twins_edit.setToolTip("Каждая строка: old=new. old — имя solid из nam, new — second name/twin.")
+        self._tr_set_placeholder(self.legacy_twins_edit, "species.legacy_twins_placeholder")
+        self._tr_set_tooltip(self.legacy_twins_edit, "species.legacy_twins_tooltip")
         self.legacy_twins_edit.setMaximumHeight(90)
         lay.addWidget(self.legacy_twins_edit)
 
         row = QHBoxLayout()
-        self.btn_species_apply = QPushButton("Применить species-параметры")
+        self.btn_species_apply = self._tr_button("species.btn_apply")
         row.addWidget(self.btn_species_apply)
         row.addStretch(1)
         lay.addLayout(row)
@@ -358,11 +481,11 @@ class MainWindow(QMainWindow):
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(["bkw", "isp"])
         self.mode_combo.setCurrentText(self.project.run_settings.mode)
-        self.btn_generate_bkwdata = QPushButton("Сгенерировать BKWDATA")
-        self.btn_run = QPushButton("Запустить расчет")
-        self.btn_cancel = QPushButton("Отмена")
+        self.btn_generate_bkwdata = self._tr_button("calc.btn_generate")
+        self.btn_run = self._tr_button("calc.btn_run")
+        self.btn_cancel = self._tr_button("common.cancel")
         self.btn_cancel.setEnabled(False)
-        top.addWidget(QLabel("Режим"))
+        top.addWidget(self._tr_label("calc.mode_label"))
         top.addWidget(self.mode_combo)
         top.addWidget(self.btn_generate_bkwdata)
         top.addWidget(self.btn_run)
@@ -375,7 +498,8 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
         lay.addWidget(self.progress)
 
-        self.calc_status = QLabel("Готов")
+        self.calc_status = QLabel()
+        self._set_status(self.calc_status, "calc.status_ready")
         lay.addWidget(self.calc_status)
 
         self.log_view = QPlainTextEdit()
@@ -390,9 +514,10 @@ class MainWindow(QMainWindow):
         lay = QVBoxLayout(self.tab_results)
 
         nav = QHBoxLayout()
-        self.btn_graph_prev = QPushButton("Prev")
-        self.btn_graph_next = QPushButton("Next")
-        self.graph_title = QLabel("Graph 1/3")
+        self.btn_graph_prev = self._tr_button("common.prev")
+        self.btn_graph_next = self._tr_button("common.next")
+        self.graph_title = QLabel()
+        self._set_status(self.graph_title, "results.graph_label_zero")
         nav.addWidget(self.btn_graph_prev)
         nav.addWidget(self.btn_graph_next)
         nav.addWidget(self.graph_title)
@@ -418,7 +543,9 @@ class MainWindow(QMainWindow):
             self.graph_widgets = []
             self.graph_meta = []
             self.graph_container = None
-            lay.addWidget(QLabel(f"pyqtgraph недоступен ({type(exc).__name__}: {exc}). Графики недоступны."))
+            no_pg_lbl = QLabel()
+            self._set_status(no_pg_lbl, "results.no_pyqtgraph", type=type(exc).__name__, exc=str(exc))
+            lay.addWidget(no_pg_lbl)
 
         self.result_text = QPlainTextEdit()
         self.result_text.setReadOnly(True)
@@ -431,28 +558,28 @@ class MainWindow(QMainWindow):
         self.export_report = QLineEdit(str(PROJECTS_DIR / "report.out"))
 
         r1 = QHBoxLayout()
-        r1.addWidget(QLabel("BKWDATA"))
+        r1.addWidget(self._tr_label("export.bkwdata_label"))
         r1.addWidget(self.export_bkwdata)
         self.btn_pick_export_bkw = QPushButton("...")
         r1.addWidget(self.btn_pick_export_bkw)
         lay.addLayout(r1)
 
         r2 = QHBoxLayout()
-        r2.addWidget(QLabel("Отчет (bkw.out/isp.out)"))
+        r2.addWidget(self._tr_label("export.report_label"))
         r2.addWidget(self.export_report)
         self.btn_pick_export_report = QPushButton("...")
         r2.addWidget(self.btn_pick_export_report)
         lay.addLayout(r2)
 
         row = QHBoxLayout()
-        self.btn_export_csv = QPushButton("Экспорт CSV")
-        self.btn_export_png = QPushButton("Экспорт PNG")
+        self.btn_export_csv = self._tr_button("export.btn_csv")
+        self.btn_export_png = self._tr_button("export.btn_png")
         row.addWidget(self.btn_export_csv)
         row.addWidget(self.btn_export_png)
         row.addStretch(1)
         lay.addLayout(row)
 
-        lay.addWidget(QLabel("PDF в v1 не включен (позже)."))
+        lay.addWidget(self._tr_label("export.pdf_note"))
         lay.addStretch(1)
 
         self.btn_pick_export_bkw.clicked.connect(self._on_pick_export_bkw)
@@ -466,11 +593,11 @@ class MainWindow(QMainWindow):
         data_row = QHBoxLayout()
         self.tdf_input_path = QLineEdit(str(TDF_ENGINE_DIR / "tdfdata"))
         self.tdf_input_path.setReadOnly(True)
-        self.btn_tdf_open_input = QPushButton("Открыть tdfdata...")
-        self.btn_tdf_save_input = QPushButton("Сохранить как...")
-        self.btn_tdf_apply_input = QPushButton("Применить в tdf_engine")
-        self.btn_tdf_reset_input = QPushButton("Сброс к исходному")
-        data_row.addWidget(QLabel("TDF input"))
+        self.btn_tdf_open_input = self._tr_button("tdf.btn_open")
+        self.btn_tdf_save_input = self._tr_button("tdf.btn_save_as")
+        self.btn_tdf_apply_input = self._tr_button("tdf.btn_apply")
+        self.btn_tdf_reset_input = self._tr_button("tdf.btn_reset")
+        data_row.addWidget(self._tr_label("tdf.input_label"))
         data_row.addWidget(self.tdf_input_path, 1)
         data_row.addWidget(self.btn_tdf_open_input)
         data_row.addWidget(self.btn_tdf_save_input)
@@ -479,11 +606,11 @@ class MainWindow(QMainWindow):
         lay.addLayout(data_row)
 
         struct_row = QHBoxLayout()
-        self.btn_tdf_struct_from_text = QPushButton("Разобрать текст в формы")
-        self.btn_tdf_struct_to_text = QPushButton("Сгенерировать tdfdata из форм")
-        self.btn_tdf_mat_add = QPushButton("Добавить материал")
-        self.btn_tdf_mat_del = QPushButton("Удалить материал")
-        self.btn_tdf_mat_apply = QPushButton("Применить материал")
+        self.btn_tdf_struct_from_text = self._tr_button("tdf.btn_parse")
+        self.btn_tdf_struct_to_text = self._tr_button("tdf.btn_generate")
+        self.btn_tdf_mat_add = self._tr_button("tdf.btn_mat_add")
+        self.btn_tdf_mat_del = self._tr_button("tdf.btn_mat_del")
+        self.btn_tdf_mat_apply = self._tr_button("tdf.btn_mat_apply")
         struct_row.addWidget(self.btn_tdf_struct_from_text)
         struct_row.addWidget(self.btn_tdf_struct_to_text)
         struct_row.addWidget(self.btn_tdf_mat_add)
@@ -494,7 +621,7 @@ class MainWindow(QMainWindow):
 
         struct_layout = QHBoxLayout()
         self.tdf_mat_table = QTableWidget(0, 4)
-        self.tdf_mat_table.setHorizontalHeaderLabels(["Маркер", "Код", "Имя", "Комментарий"])
+        self._tr_set_header_labels(self.tdf_mat_table, ["tdf.col_marker", "tdf.col_code", "tdf.col_name", "tdf.col_comment"])
         self.tdf_mat_table.setMinimumHeight(180)
         struct_layout.addWidget(self.tdf_mat_table, 2)
 
@@ -505,19 +632,19 @@ class MainWindow(QMainWindow):
         self.tdf_mat_comment = QLineEdit()
         self.tdf_mat_nline = QLineEdit()
         self.tdf_mat_body = QPlainTextEdit()
-        self.tdf_mat_body.setPlaceholderText("Параметры материала (строки после nline)")
+        self._tr_set_placeholder(self.tdf_mat_body, "tdf.body_placeholder")
         self.tdf_mat_body.setMaximumHeight(180)
-        form.addWidget(QLabel("Маркер"), 0, 0)
+        form.addWidget(self._tr_label("tdf.form.marker"), 0, 0)
         form.addWidget(self.tdf_mat_marker, 0, 1)
-        form.addWidget(QLabel("Код"), 1, 0)
+        form.addWidget(self._tr_label("tdf.form.code"), 1, 0)
         form.addWidget(self.tdf_mat_code, 1, 1)
-        form.addWidget(QLabel("Имя"), 2, 0)
+        form.addWidget(self._tr_label("tdf.form.name"), 2, 0)
         form.addWidget(self.tdf_mat_name, 2, 1)
-        form.addWidget(QLabel("Комментарий"), 3, 0)
+        form.addWidget(self._tr_label("tdf.form.comment"), 3, 0)
         form.addWidget(self.tdf_mat_comment, 3, 1)
-        form.addWidget(QLabel("nline"), 4, 0)
+        form.addWidget(self._tr_label("tdf.form.nline"), 4, 0)
         form.addWidget(self.tdf_mat_nline, 4, 1)
-        form.addWidget(QLabel("Body"), 5, 0)
+        form.addWidget(self._tr_label("tdf.form.body"), 5, 0)
         form.addWidget(self.tdf_mat_body, 5, 1)
         form_w = QWidget()
         form_w.setLayout(form)
@@ -525,26 +652,27 @@ class MainWindow(QMainWindow):
         lay.addLayout(struct_layout, 2)
 
         self.tdf_input_editor = QPlainTextEdit()
-        self.tdf_input_editor.setPlaceholderText("Содержимое tdfdata")
+        self._tr_set_placeholder(self.tdf_input_editor, "tdf.editor_placeholder")
         lay.addWidget(self.tdf_input_editor, 2)
 
         row = QHBoxLayout()
-        self.btn_tdf_run = QPushButton("Запустить TDF")
-        self.btn_tdf_cancel = QPushButton("Отмена")
+        self.btn_tdf_run = self._tr_button("tdf.btn_run")
+        self.btn_tdf_cancel = self._tr_button("common.cancel")
         self.btn_tdf_cancel.setEnabled(False)
         self.tdf_curve_picker = QComboBox()
         self.tdf_curve_picker.setMinimumWidth(460)
-        self.btn_tdf_prev = QPushButton("Prev")
-        self.btn_tdf_next = QPushButton("Next")
+        self.btn_tdf_prev = self._tr_button("common.prev")
+        self.btn_tdf_next = self._tr_button("common.next")
         row.addWidget(self.btn_tdf_run)
         row.addWidget(self.btn_tdf_cancel)
-        row.addWidget(QLabel("Кривая"))
+        row.addWidget(self._tr_label("tdf.curve_label"))
         row.addWidget(self.tdf_curve_picker, 1)
         row.addWidget(self.btn_tdf_prev)
         row.addWidget(self.btn_tdf_next)
         lay.addLayout(row)
 
-        self.tdf_status = QLabel("TDF: готов")
+        self.tdf_status = QLabel()
+        self._set_status(self.tdf_status, "tdf.status_ready")
         lay.addWidget(self.tdf_status)
 
         self.tdf_curves: list[TdfCurve] = []
@@ -558,7 +686,8 @@ class MainWindow(QMainWindow):
             lay.addWidget(self.tdf_plot, 5)
         except Exception as exc:
             self.tdf_plot = None
-            self.tdf_plot_label = QLabel(f"pyqtgraph недоступен ({type(exc).__name__}: {exc}). Будут показаны PNG-графики из TDF.")
+            self.tdf_plot_label = QLabel()
+            self._set_status(self.tdf_plot_label, "tdf.no_pyqtgraph", type=type(exc).__name__, exc=str(exc))
             self.tdf_plot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.tdf_plot_label.setMinimumHeight(280)
             self.tdf_plot_label.setWordWrap(True)
@@ -591,7 +720,7 @@ class MainWindow(QMainWindow):
         self._load_tdf_input_from_engine()
         self._on_tdf_struct_from_text()
 
-    def _combo_set_by_data(self, combo: QComboBox, value: int | None) -> None:
+    def _combo_set_by_data(self, combo: QComboBox, value) -> None:
         for i in range(combo.count()):
             if combo.itemData(i) == value:
                 combo.setCurrentIndex(i)
@@ -640,7 +769,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_project_ui(self) -> None:
         self.project_name.setText(self.project.name)
-        self.source_mode_combo.setCurrentText(self.project.source_mode)
+        self._combo_set_by_data(self.source_mode_combo, self.project.source_mode)
         idx = self.template_combo.findText(self.project.template)
         if idx >= 0:
             self.template_combo.setCurrentIndex(idx)
@@ -663,12 +792,22 @@ class MainWindow(QMainWindow):
         self.legacy_aispr_edit.setText(self.project.legacy_aispr)
         self.legacy_constants_edit.setPlainText("\n".join(self.project.legacy_constants))
         self.legacy_twins_edit.setPlainText("\n".join(self.project.legacy_solid_twins))
-        self.project_info.setText(
-            f"Проект: {self.project.name}; источник: {self.project.source_mode}; "
-            f"шаблон: {self.project.template}; input: {self.project.source_bkwdata or '-'}"
-        )
+        self._refresh_project_info()
         self._update_source_mode_ui()
         self._load_mix_table()
+
+    def _refresh_project_info(self) -> None:
+        if not hasattr(self, "project_info"):
+            return
+        self.project_info.setText(
+            t(
+                "project.info",
+                name=self.project.name,
+                source=self.project.source_mode,
+                template=self.project.template,
+                input=self.project.source_bkwdata or "-",
+            )
+        )
 
     def _refresh_flow_state(self) -> None:
         has_project = bool(
@@ -694,18 +833,20 @@ class MainWindow(QMainWindow):
             self.mix_table.setItem(r, 1, QTableWidgetItem(f"{x.value:g}"))
 
     def _update_source_mode_ui(self) -> None:
-        mode = self.source_mode_combo.currentText()
+        mode = self.source_mode_combo.currentData()
         is_template = mode == "template"
         self.template_combo.setEnabled(is_template)
         self.input_bkwdata_edit.setEnabled(not is_template)
         self.btn_pick_bkwdata.setEnabled(not is_template)
 
-    def _on_source_mode_changed(self, value: str) -> None:
+    def _on_source_mode_changed(self, _index: int) -> None:
+        value = self.source_mode_combo.currentData() or "template"
         self.project.source_mode = value
         if value == "import" and self.input_bkwdata_edit.text().strip():
             self.project.last_output_bkwdata = self.input_bkwdata_edit.text().strip()
         self._update_source_mode_ui()
         self._refresh_flow_state()
+        self._refresh_project_info()
 
     def _on_template_changed(self, value: str) -> None:
         self.project.template = value
@@ -723,11 +864,11 @@ class MainWindow(QMainWindow):
         self._refresh_flow_state()
 
     def _on_pick_bkwdata(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Open BKWDATA", str(Path.cwd()))
+        path, _ = QFileDialog.getOpenFileName(self, t("dialog.bkwdata_open_title"), str(Path.cwd()))
         if path:
             self.project.source_bkwdata = str(self._abs_path(path))
             self.project.source_mode = "import"
-            self.source_mode_combo.setCurrentText("import")
+            self._combo_set_by_data(self.source_mode_combo, "import")
             self.input_bkwdata_edit.setText(self.project.source_bkwdata)
             self._refresh_flow_state()
 
@@ -741,7 +882,7 @@ class MainWindow(QMainWindow):
         self._refresh_flow_state()
 
     def _on_load_project(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Open project", str(PROJECTS_DIR), "Project (*.bkwproj.json)")
+        path, _ = QFileDialog.getOpenFileName(self, t("dialog.project_open_title"), str(PROJECTS_DIR), t("dialog.project_filter"))
         if not path:
             return
         self.project = load_project(path)
@@ -752,11 +893,11 @@ class MainWindow(QMainWindow):
 
     def _on_save_project(self) -> None:
         self._sync_legacy_from_ui()
-        path, _ = QFileDialog.getSaveFileName(self, "Save project", str(PROJECTS_DIR / f"{self.project.name}.bkwproj.json"), "Project (*.bkwproj.json)")
+        path, _ = QFileDialog.getSaveFileName(self, t("dialog.project_save_title"), str(PROJECTS_DIR / f"{self.project.name}.bkwproj.json"), t("dialog.project_filter"))
         if not path:
             return
         save_project(path, self.project)
-        QMessageBox.information(self, "Project", f"Saved: {path}")
+        QMessageBox.information(self, t("dialog.project_title"), t("dialog.project_saved", path=path))
 
     def _on_mix_add(self) -> None:
         r = self.mix_table.rowCount()
@@ -819,13 +960,13 @@ class MainWindow(QMainWindow):
                 self._mark_mix_row_error(int(ctx["mix_row"]), msg)
             if "mix_basis" in ctx:
                 self._mark_widget_error(self.mix_basis, msg)
-            QMessageBox.warning(self, "Смесь", msg)
+            QMessageBox.warning(self, t("dialog.mix_title"), msg)
             return
 
         self.project.mix = items
         self.project.mix_basis = self.mix_basis.currentText()
         self.project.strict_elements = self.mix_strict.isChecked()
-        self.mix_hint.setText(f"Принято компонентов: {len(items)}")
+        self._set_status(self.mix_hint, "mix.applied", n=len(items))
         self._refresh_flow_state()
 
     def _on_species_apply(self) -> None:
@@ -849,7 +990,7 @@ class MainWindow(QMainWindow):
                 self._mark_widget_error(self.legacy_constants_edit, msg)
             elif widget == "legacy_twins":
                 self._mark_widget_error(self.legacy_twins_edit, msg)
-            QMessageBox.warning(self, "Species", msg)
+            QMessageBox.warning(self, t("dialog.species_title"), msg)
             return
         self.project.add_gas_db = [x.strip().lower() for x in self.gas_db_edit.text().split(",") if x.strip()]
         self.project.add_solid_db = [x.strip() for x in self.solid_db_edit.text().split(",") if x.strip()]
@@ -865,34 +1006,34 @@ class MainWindow(QMainWindow):
     def _parse_db_tokens(self, text: str, *, label: str, widget_key: str) -> tuple[bool, str, list[str], dict]:
         tokens = [x.strip() for x in text.split(",") if x.strip()]
         seen: set[str] = set()
-        for i, t in enumerate(tokens, start=1):
-            if not self._NAME_RE.match(t):
-                return False, f"{label}: недопустимое имя '{t}' (позиция {i}).", [], {"widget": widget_key}
-            key = t.lower()
+        for i, tok in enumerate(tokens, start=1):
+            if not self._NAME_RE.match(tok):
+                return False, t("v.name_invalid", label=label, token=tok, i=i), [], {"widget": widget_key}
+            key = tok.lower()
             if key in seen:
-                return False, f"{label}: дубликат '{t}'.", [], {"widget": widget_key}
+                return False, t("v.name_dup", label=label, token=tok), [], {"widget": widget_key}
             seen.add(key)
         return True, "", tokens, {}
 
     def _validate_composition(self, comp: str, *, line: str, widget_key: str) -> tuple[bool, str, dict]:
         parts = [x.strip() for x in comp.split(",") if x.strip()]
         if not parts:
-            return False, f"Пустой composition: {line}", {"widget": widget_key}
+            return False, t("v.composition_empty", line=line), {"widget": widget_key}
         elems: set[str] = set()
         for p in parts:
             if not self._COMP_RE.match(p):
-                return False, f"Неверный composition-токен '{p}': {line}", {"widget": widget_key}
+                return False, t("v.composition_invalid_token", p=p, line=line), {"widget": widget_key}
             el, val = [x.strip() for x in p.split("=", 1)]
             k = el.lower()
             if k in elems:
-                return False, f"Повтор элемента '{el}' в composition: {line}", {"widget": widget_key}
+                return False, t("v.composition_dup_element", el=el, line=line), {"widget": widget_key}
             elems.add(k)
             try:
                 f = float(val)
             except Exception:
-                return False, f"Нечисловое значение элемента '{p}': {line}", {"widget": widget_key}
+                return False, t("v.composition_non_numeric", p=p, line=line), {"widget": widget_key}
             if f <= 0.0:
-                return False, f"Значение элемента должно быть > 0 ('{p}'): {line}", {"widget": widget_key}
+                return False, t("v.composition_non_positive", p=p, line=line), {"widget": widget_key}
         return True, "", {}
 
     def _validate_species_fields(self) -> tuple[bool, str, dict]:
@@ -911,22 +1052,22 @@ class MainWindow(QMainWindow):
         for n, line in enumerate([x.strip() for x in self.gas_custom_edit.toPlainText().splitlines() if x.strip()], start=1):
             parts = [p.strip() for p in line.split("|")]
             if len(parts) != 3:
-                return False, f"Gas custom строка {n}: формат name|8therc|composition", {"widget": "gas_custom"}
+                return False, t("v.gas_custom_format", n=n), {"widget": "gas_custom"}
             if not parts[0]:
-                return False, f"Gas custom строка {n}: пустое имя.", {"widget": "gas_custom"}
+                return False, t("v.gas_custom_empty_name", n=n), {"widget": "gas_custom"}
             if not self._NAME_RE.match(parts[0]):
-                return False, f"Gas custom строка {n}: недопустимое имя '{parts[0]}'.", {"widget": "gas_custom"}
+                return False, t("v.gas_custom_invalid_name", n=n, name=parts[0]), {"widget": "gas_custom"}
             k = parts[0].lower()
             if k in gas_custom_names:
-                return False, f"Gas custom: дубликат имени '{parts[0]}'.", {"widget": "gas_custom"}
+                return False, t("v.gas_custom_dup_name", name=parts[0]), {"widget": "gas_custom"}
             gas_custom_names.add(k)
             vals = [x.strip() for x in parts[1].split(",") if x.strip()]
             if len(vals) != 8:
-                return False, f"Gas custom '{parts[0]}': нужно ровно 8 THERC.", {"widget": "gas_custom"}
+                return False, t("v.gas_custom_therc8", name=parts[0]), {"widget": "gas_custom"}
             try:
                 [float(v) for v in vals]
             except Exception:
-                return False, f"Gas custom '{parts[0]}': THERC содержит нечисловые значения.", {"widget": "gas_custom"}
+                return False, t("v.gas_custom_therc_non_numeric", name=parts[0]), {"widget": "gas_custom"}
             ok_comp, msg_comp, comp_ctx = self._validate_composition(parts[2], line=line, widget_key="gas_custom")
             if not ok_comp:
                 return False, msg_comp, comp_ctx
@@ -935,26 +1076,26 @@ class MainWindow(QMainWindow):
         for n, line in enumerate([x.strip() for x in self.solid_custom_edit.toPlainText().splitlines() if x.strip()], start=1):
             parts = [p.strip() for p in line.split("|")]
             if len(parts) != 4:
-                return False, f"Solid custom строка {n}: формат name|8therc|12soleq|composition", {"widget": "solid_custom"}
+                return False, t("v.solid_custom_format", n=n), {"widget": "solid_custom"}
             if not parts[0]:
-                return False, f"Solid custom строка {n}: пустое имя.", {"widget": "solid_custom"}
+                return False, t("v.solid_custom_empty_name", n=n), {"widget": "solid_custom"}
             if not self._NAME_RE.match(parts[0]):
-                return False, f"Solid custom строка {n}: недопустимое имя '{parts[0]}'.", {"widget": "solid_custom"}
+                return False, t("v.solid_custom_invalid_name", n=n, name=parts[0]), {"widget": "solid_custom"}
             k = parts[0].lower()
             if k in solid_custom_names:
-                return False, f"Solid custom: дубликат имени '{parts[0]}'.", {"widget": "solid_custom"}
+                return False, t("v.solid_custom_dup_name", name=parts[0]), {"widget": "solid_custom"}
             solid_custom_names.add(k)
             vals_t = [x.strip() for x in parts[1].split(",") if x.strip()]
             vals_s = [x.strip() for x in parts[2].split(",") if x.strip()]
             if len(vals_t) != 8:
-                return False, f"Solid custom '{parts[0]}': нужно ровно 8 THERC.", {"widget": "solid_custom"}
+                return False, t("v.solid_custom_therc8", name=parts[0]), {"widget": "solid_custom"}
             if len(vals_s) != 12:
-                return False, f"Solid custom '{parts[0]}': нужно ровно 12 SOLEQ.", {"widget": "solid_custom"}
+                return False, t("v.solid_custom_soleq12", name=parts[0]), {"widget": "solid_custom"}
             try:
                 [float(v) for v in vals_t]
                 [float(v) for v in vals_s]
             except Exception:
-                return False, f"Solid custom '{parts[0]}': THERC/SOLEQ содержит нечисловые значения.", {"widget": "solid_custom"}
+                return False, t("v.solid_custom_thercsoleq_non_numeric", name=parts[0]), {"widget": "solid_custom"}
             ok_comp, msg_comp, comp_ctx = self._validate_composition(parts[3], line=line, widget_key="solid_custom")
             if not ok_comp:
                 return False, msg_comp, comp_ctx
@@ -963,53 +1104,53 @@ class MainWindow(QMainWindow):
         solid_db_set = {x.lower() for x in solid_db}
         if gas_db_set & gas_custom_names:
             dup = sorted(gas_db_set & gas_custom_names)[0]
-            return False, f"Конфликт species: '{dup}' указан и в gas db, и в gas custom.", {"widget": "gas_db"}
+            return False, t("v.species_gas_conflict", name=dup), {"widget": "gas_db"}
         if solid_db_set & solid_custom_names:
             dup = sorted(solid_db_set & solid_custom_names)[0]
-            return False, f"Конфликт species: '{dup}' указан и в solid db, и в solid custom.", {"widget": "solid_db"}
+            return False, t("v.species_solid_conflict", name=dup), {"widget": "solid_db"}
 
         athrho_txt = self.legacy_athrho_edit.text().strip()
         if athrho_txt:
             vals = [x.strip() for x in athrho_txt.split(",") if x.strip()]
             if len(vals) > 4:
-                return False, "Legacy athrho: максимум 4 значения.", {"widget": "legacy_athrho"}
+                return False, t("v.legacy_athrho_max"), {"widget": "legacy_athrho"}
             try:
                 [float(x) for x in vals]
             except Exception:
-                return False, "Legacy athrho: допускаются только числа через запятую.", {"widget": "legacy_athrho"}
+                return False, t("v.legacy_athrho_non_numeric"), {"widget": "legacy_athrho"}
 
         aispr_txt = self.legacy_aispr_edit.text().strip()
         if aispr_txt:
             try:
                 float(aispr_txt)
             except Exception:
-                return False, "Legacy aispr: должно быть числом.", {"widget": "legacy_aispr"}
+                return False, t("v.legacy_aispr_non_numeric"), {"widget": "legacy_aispr"}
 
         seen_const: set[int] = set()
         for line in [x.strip() for x in self.legacy_constants_edit.toPlainText().splitlines() if x.strip()]:
             if "=" not in line:
-                return False, f"Legacy constants: ожидается no=val, получено '{line}'.", {"widget": "legacy_constants"}
+                return False, t("v.legacy_constants_format", line=line), {"widget": "legacy_constants"}
             no_s, val_s = line.split("=", 1)
             try:
                 no = int(no_s.strip())
             except Exception:
-                return False, f"Legacy constants: неверный номер '{no_s}'.", {"widget": "legacy_constants"}
+                return False, t("v.legacy_constants_invalid_no", no=no_s), {"widget": "legacy_constants"}
             if no < 1 or no > 30:
-                return False, f"Legacy constants: номер {no} вне диапазона 1..30.", {"widget": "legacy_constants"}
+                return False, t("v.legacy_constants_out_of_range", no=no), {"widget": "legacy_constants"}
             if no in seen_const:
-                return False, f"Legacy constants: дубликат номера {no}.", {"widget": "legacy_constants"}
+                return False, t("v.legacy_constants_dup", no=no), {"widget": "legacy_constants"}
             seen_const.add(no)
             try:
                 float(val_s.strip())
             except Exception:
-                return False, f"Legacy constants: неверное значение для {no}.", {"widget": "legacy_constants"}
+                return False, t("v.legacy_constants_invalid_value", no=no), {"widget": "legacy_constants"}
 
         for line in [x.strip() for x in self.legacy_twins_edit.toPlainText().splitlines() if x.strip()]:
             if "=" not in line:
-                return False, f"Legacy twin: ожидается old=new, получено '{line}'.", {"widget": "legacy_twins"}
+                return False, t("v.legacy_twin_format", line=line), {"widget": "legacy_twins"}
             old_s, new_s = line.split("=", 1)
             if not old_s.strip() or not new_s.strip():
-                return False, f"Legacy twin: ожидается old=new, получено '{line}'.", {"widget": "legacy_twins"}
+                return False, t("v.legacy_twin_format", line=line), {"widget": "legacy_twins"}
 
         return True, "", {}
 
@@ -1024,47 +1165,47 @@ class MainWindow(QMainWindow):
             if not n and not v:
                 continue
             if n and not v:
-                return False, f"Строка смеси #{r+1}: задан компонент, но пустое значение.", [], {"mix_row": r}
+                return False, t("v.mix_row_empty_value", r=r + 1), [], {"mix_row": r}
             if v and not n:
-                return False, f"Строка смеси #{r+1}: задано значение без имени компонента.", [], {"mix_row": r}
+                return False, t("v.mix_row_value_no_name", r=r + 1), [], {"mix_row": r}
             if not self._NAME_RE.match(n):
-                return False, f"Строка смеси #{r+1}: недопустимое имя компонента '{n}'.", [], {"mix_row": r}
+                return False, t("v.mix_row_invalid_name", r=r + 1, name=n), [], {"mix_row": r}
             key = n.lower()
             if key in seen:
-                return False, f"Строка смеси #{r+1}: дубликат компонента '{n}'.", [], {"mix_row": r}
+                return False, t("v.mix_row_dup", r=r + 1, name=n), [], {"mix_row": r}
             seen.add(key)
             try:
                 fv = float(v)
             except Exception:
-                return False, f"Строка смеси #{r+1}: значение не число.", [], {"mix_row": r}
+                return False, t("v.mix_row_non_numeric", r=r + 1), [], {"mix_row": r}
             if fv <= 0.0:
-                return False, f"Строка смеси #{r+1}: значение должно быть > 0.", [], {"mix_row": r}
+                return False, t("v.mix_row_non_positive", r=r + 1), [], {"mix_row": r}
             items.append(MixItem(name=n, value=fv))
 
         if self.mix_basis.currentText() not in {"wt", "mol"}:
-            return False, "Неверная база смеси (должно быть wt или mol).", [], {"mix_basis": True}
+            return False, t("v.mix_basis_invalid"), [], {"mix_basis": True}
         if items and sum(x.value for x in items) <= 0.0:
-            return False, "Сумма значений смеси должна быть > 0.", [], {"mix_basis": True}
+            return False, t("v.mix_sum_non_positive"), [], {"mix_basis": True}
         return True, "", items, {}
 
     def _validate_mode_and_inputs(self) -> tuple[bool, str, dict]:
-        mode = self.source_mode_combo.currentText().strip()
+        mode = self.source_mode_combo.currentData() or "template"
         if mode not in {"template", "import"}:
-            return False, "Неверный режим источника. Допустимо: template или import.", {"source_mode": True}
+            return False, t("v.source_mode_invalid"), {"source_mode": True}
         if mode == "import":
             src = self.input_bkwdata_edit.text().strip()
             if not src:
-                return False, "Выбран режим import, но не указан файл BKWDATA.", {"input_bkwdata": True}
+                return False, t("v.source_import_no_file"), {"input_bkwdata": True}
             p = self._abs_path(src)
             if not p.exists():
-                return False, f"Файл BKWDATA не найден: {p}", {"input_bkwdata": True}
+                return False, t("v.bkwdata_not_found", p=str(p)), {"input_bkwdata": True}
             if not p.is_file():
-                return False, f"Путь BKWDATA не является файлом: {p}", {"input_bkwdata": True}
+                return False, t("v.bkwdata_not_a_file", p=str(p)), {"input_bkwdata": True}
             self.project.source_bkwdata = str(p)
             self.input_bkwdata_edit.setText(str(p))
         else:
             if not self.template_combo.currentText().strip():
-                return False, "Не выбран шаблон BKWDATA.", {"template": True}
+                return False, t("v.template_missing"), {"template": True}
         return True, "", {}
 
     def _validate_before_generate(self) -> tuple[bool, str, dict]:
@@ -1084,36 +1225,36 @@ class MainWindow(QMainWindow):
     def _validate_before_run(self) -> tuple[bool, str, dict]:
         mode = self.mode_combo.currentText().strip()
         if mode not in {"bkw", "isp"}:
-            return False, "Неверный режим расчета. Допустимо: bkw или isp.", {"mode": True}
+            return False, t("v.run_mode_invalid"), {"mode": True}
         candidate = self.project.last_output_bkwdata
-        if self.source_mode_combo.currentText().strip() == "import":
+        if (self.source_mode_combo.currentData() or "template") == "import":
             src = self.input_bkwdata_edit.text().strip()
             if src:
                 candidate = src
         if not candidate:
-            return False, "Сначала сгенерируйте BKWDATA или укажите импортируемый BKWDATA.", {}
+            return False, t("v.bkwdata_missing_for_run"), {}
         bkw = self._abs_path(candidate)
         if not bkw.exists():
-            return False, f"BKWDATA для расчета не найден: {bkw}", {}
+            return False, t("v.bkwdata_run_missing", bkw=str(bkw)), {}
         self.project.last_output_bkwdata = str(bkw)
         report = self._abs_path(self.export_report.text().strip() or str(PROJECTS_DIR / ("bkw.out" if mode == "bkw" else "isp.out")))
         if str(report).strip() == "":
-            return False, "Не задан путь для отчета.", {"report": True}
+            return False, t("v.report_path_missing"), {"report": True}
         if report.resolve() == bkw.resolve():
-            return False, "Конфликт путей: отчет не должен записываться в файл BKWDATA.", {"report": True}
+            return False, t("v.report_conflict"), {"report": True}
         try:
             report.parent.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
-            return False, f"Не удалось создать каталог отчета: {exc}", {"report": True}
+            return False, t("v.report_dir_create", exc=str(exc)), {"report": True}
         return True, "", {}
 
     def _on_pick_export_bkw(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Save BKWDATA", self.export_bkwdata.text())
+        path, _ = QFileDialog.getSaveFileName(self, t("dialog.bkwdata_save_title"), self.export_bkwdata.text())
         if path:
             self.export_bkwdata.setText(path)
 
     def _on_pick_export_report(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Save report", self.export_report.text())
+        path, _ = QFileDialog.getSaveFileName(self, t("dialog.report_save_title"), self.export_report.text())
         if path:
             self.export_report.setText(path)
 
@@ -1148,7 +1289,7 @@ class MainWindow(QMainWindow):
                     self._mark_widget_error(self.legacy_constants_edit, msg)
                 if ctx.get("widget") == "legacy_twins":
                     self._mark_widget_error(self.legacy_twins_edit, msg)
-                QMessageBox.warning(self, "Проверка ввода", msg)
+                QMessageBox.warning(self, t("dialog.input_validation_title"), msg)
                 return
             ok, _m, items, _ctx = self._validate_mix_table()
             if ok:
@@ -1156,7 +1297,7 @@ class MainWindow(QMainWindow):
                 self.project.mix_basis = self.mix_basis.currentText()
                 self.project.strict_elements = self.mix_strict.isChecked()
             self.project.template = self.template_combo.currentText().strip()
-            self.project.source_mode = self.source_mode_combo.currentText().strip()
+            self.project.source_mode = self.source_mode_combo.currentData() or "template"
             self.project.source_bkwdata = self.input_bkwdata_edit.text().strip()
             self._sync_legacy_from_ui()
 
@@ -1184,13 +1325,13 @@ class MainWindow(QMainWindow):
             if err_text:
                 self.log_view.appendPlainText(err_text)
             if rc != 0:
-                QMessageBox.critical(self, "BKWDATA", f"Ошибка генерации BKWDATA (code={rc})")
+                QMessageBox.critical(self, t("dialog.bkwdata_title"), t("dialog.bkwdata_error", rc=rc))
                 return
             self.project.last_output_bkwdata = str(output)
-            self.calc_status.setText(f"BKWDATA generated: {output}")
+            self._set_status(self.calc_status, "calc.bkwdata_generated", path=str(output))
             self._refresh_flow_state()
         except Exception as exc:
-            QMessageBox.critical(self, "BKWDATA", str(exc))
+            QMessageBox.critical(self, t("dialog.bkwdata_title"), str(exc))
 
     def _build_userbkw_argv(self, output: Path) -> list[str]:
         cmd: list[str] = []
@@ -1240,7 +1381,7 @@ class MainWindow(QMainWindow):
 
     def _on_run_calc(self) -> None:
         if self._active_calc_task is not None:
-            QMessageBox.information(self, "Run", "Расчет уже выполняется.")
+            QMessageBox.information(self, t("dialog.run_title"), t("dialog.run_already"))
             return
         self._clear_validation_marks()
         ok, msg, ctx = self._validate_before_run()
@@ -1249,7 +1390,7 @@ class MainWindow(QMainWindow):
                 self._mark_widget_error(self.mode_combo, msg)
             if ctx.get("report"):
                 self._mark_widget_error(self.export_report, msg)
-            QMessageBox.warning(self, "Run", msg)
+            QMessageBox.warning(self, t("dialog.run_title"), msg)
             return
 
         self.project.run_settings = replace(self.project.run_settings, mode=self.mode_combo.currentText())
@@ -1262,7 +1403,7 @@ class MainWindow(QMainWindow):
         self.progress.setValue(1)
         self.btn_run.setEnabled(False)
         self.btn_cancel.setEnabled(True)
-        self.calc_status.setText("Расчет выполняется... (1%)")
+        self._set_status(self.calc_status, "calc.status_running", pct=1)
         self.log_view.clear()
 
         task = CalcTask(
@@ -1280,12 +1421,12 @@ class MainWindow(QMainWindow):
 
     def _on_cancel_calc(self) -> None:
         self.runner.cancel()
-        self.calc_status.setText("Отмена запрошена")
+        self._set_status(self.calc_status, "calc.status_cancel_requested")
 
     def _on_calc_progress(self, pct: int, msg: str) -> None:
         self.progress.setRange(0, 100)
         self.progress.setValue(max(0, min(100, int(pct))))
-        self.calc_status.setText(f"{msg} ({int(pct)}%)")
+        self._set_status(self.calc_status, "calc.status_running_progress", phase_key=msg, pct=int(pct))
 
     def _on_calc_failed(self, msg: str) -> None:
         self._active_calc_task = None
@@ -1293,8 +1434,8 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
         self.btn_run.setEnabled(True)
         self.btn_cancel.setEnabled(False)
-        self.calc_status.setText("Ошибка расчета")
-        QMessageBox.critical(self, "Run failed", msg)
+        self._set_status(self.calc_status, "calc.status_error")
+        QMessageBox.critical(self, t("dialog.run_failed_title"), msg)
 
     def _on_calc_finished(self, rc: int, report_path: Path) -> None:
         self._active_calc_task = None
@@ -1304,12 +1445,12 @@ class MainWindow(QMainWindow):
         self.btn_cancel.setEnabled(False)
         if rc != 0:
             if rc == 124:
-                self.calc_status.setText("Расчет прерван по таймауту")
+                self._set_status(self.calc_status, "calc.status_timeout")
             else:
-                self.calc_status.setText(f"Расчет завершен с ошибкой: {rc}")
+                self._set_status(self.calc_status, "calc.status_failed", rc=rc)
             return
         self.project.last_output_report = str(report_path)
-        self.calc_status.setText(f"Расчет завершен: {report_path}")
+        self._set_status(self.calc_status, "calc.status_finished", path=str(report_path))
         self._load_report_text()
         self._load_result_graphs()
         # One deferred reload makes graph rendering resilient to transient UI timing issues.
@@ -1318,7 +1459,7 @@ class MainWindow(QMainWindow):
             h = len(self.last_bkw_tables.hugoniot) if self.last_bkw_tables else 0
             s = len(self.last_bkw_tables.isentrope) if self.last_bkw_tables else 0
             i = len(self.last_isp_points)
-            self.calc_status.setText(f"Расчет завершен, но графики не извлечены (hug={h}, iso={s}, isp={i})")
+            self._set_status(self.calc_status, "calc.status_no_graphs", h=h, s=s, i=i)
         self._refresh_flow_state()
 
     def _load_report_text(self) -> None:
@@ -1353,23 +1494,23 @@ class MainWindow(QMainWindow):
             self._set_result_graphs([])
             return
         w = self.pg.PlotWidget()
-        w.setTitle("ISP summary: chamber/exhaust")
-        w.setLabel("bottom", "State")
-        w.setLabel("left", "Value")
+        w.setTitle(t("graph.isp.title"))
+        w.setLabel("bottom", t("graph.isp.axis_state"))
+        w.setLabel("left", t("graph.isp.axis_value"))
         w.addLegend(offset=(10, 10))
 
         x = list(range(len(points)))
         ticks = [[(i, p.state) for i, p in enumerate(points)]]
         w.getAxis("bottom").setTicks(ticks)
-        w.plot(x, [p.pressure_bars for p in points], pen="y", symbol="o", name="Pressure (bar)")
-        w.plot(x, [p.isp for p in points], pen="c", symbol="t", name="ISP")
-        w.plot(x, [p.temperature_k for p in points], pen="m", symbol="s", name="Temperature (K)")
-        w.plot(x, [p.volume_cc_gm for p in points], pen="g", symbol="d", name="Volume (cc/gm)")
+        w.plot(x, [p.pressure_bars for p in points], pen="y", symbol="o", name=t("graph.isp.pressure"))
+        w.plot(x, [p.isp for p in points], pen="c", symbol="t", name=t("graph.isp.isp"))
+        w.plot(x, [p.temperature_k for p in points], pen="m", symbol="s", name=t("graph.isp.temperature"))
+        w.plot(x, [p.volume_cc_gm for p in points], pen="g", symbol="d", name=t("graph.isp.volume"))
 
         self.graph_container.clear()
         self.graph_container.addTab(w, "G1")
         self.graph_widgets = [w]
-        self.graph_meta = [("ISP summary: chamber/exhaust", "G1")]
+        self.graph_meta = [(t("graph.isp.title"), "G1")]
         self.btn_graph_prev.setEnabled(True)
         self.btn_graph_next.setEnabled(True)
         self._update_graph_title()
@@ -1428,13 +1569,13 @@ class MainWindow(QMainWindow):
         defs: list[tuple[str, str, str, list[float], list[float]]] = []
         if self.last_bkw_tables.hugoniot:
             h = self.last_bkw_tables.hugoniot
-            defs.append(("Hugoniot P-V", "V (cc/g)", "P (mb)", [r[1] for r in h], [r[0] for r in h]))
-            defs.append(("Hugoniot P-T", "T (K)", "P (mb)", [r[2] for r in h], [r[0] for r in h]))
+            defs.append((t("graph.hugoniot_pv"), t("graph.axis.v"), t("graph.axis.p"), [r[1] for r in h], [r[0] for r in h]))
+            defs.append((t("graph.hugoniot_pt"), t("graph.axis.t"), t("graph.axis.p"), [r[2] for r in h], [r[0] for r in h]))
         if self.last_bkw_tables.isentrope:
             s = self.last_bkw_tables.isentrope
-            defs.append(("Isentrope P-V", "V (cc/g)", "P (mb)", [r[1] for r in s], [r[0] for r in s]))
-            defs.append(("Isentrope P-T", "T (K)", "P (mb)", [r[2] for r in s], [r[0] for r in s]))
-            defs.append(("Isentrope P-u", "u", "P (mb)", [r[5] for r in s], [r[0] for r in s]))
+            defs.append((t("graph.isentrope_pv"), t("graph.axis.v"), t("graph.axis.p"), [r[1] for r in s], [r[0] for r in s]))
+            defs.append((t("graph.isentrope_pt"), t("graph.axis.t"), t("graph.axis.p"), [r[2] for r in s], [r[0] for r in s]))
+            defs.append((t("graph.isentrope_pu"), t("graph.axis.u"), t("graph.axis.p"), [r[5] for r in s], [r[0] for r in s]))
 
         if defs:
             self._set_result_graphs(defs)
@@ -1448,7 +1589,7 @@ class MainWindow(QMainWindow):
             return
         n = self.graph_container.count()
         if n <= 0:
-            self.graph_title.setText("Graph 0/0")
+            self._set_status(self.graph_title, "results.graph_label_zero")
             return
         i = self.graph_container.currentIndex()
         if i < 0:
@@ -1461,7 +1602,7 @@ class MainWindow(QMainWindow):
             return
         n = self.graph_container.count()
         if n <= 0:
-            self.graph_title.setText("Graph 0/0")
+            self._set_status(self.graph_title, "results.graph_label_zero")
             return
         i = self.graph_container.currentIndex()
         if i < 0:
@@ -1470,23 +1611,23 @@ class MainWindow(QMainWindow):
         self._update_graph_title()
 
     def _update_graph_title(self) -> None:
-        if not self.graph_container:
+        if not getattr(self, "graph_container", None) or not getattr(self, "graph_title", None):
             return
         n = self.graph_container.count()
         if n == 0:
-            self.graph_title.setText("Graph 0/0")
+            self._set_status(self.graph_title, "results.graph_label_zero")
             return
         i = self.graph_container.currentIndex()
         title = self.graph_meta[i][0] if i < len(self.graph_meta) else ""
-        self.graph_title.setText(f"Graph {i+1}/{n}: {title}")
+        self._set_status(self.graph_title, "results.graph_label", i=i + 1, n=n, title=title)
 
     def _on_export_csv(self) -> None:
         report = Path(self.project.last_output_report) if self.project.last_output_report else None
         if not report or not report.exists():
-            QMessageBox.warning(self, "CSV", "Нет отчета для экспорта. Сначала выполните расчет.")
+            QMessageBox.warning(self, t("dialog.csv_title"), t("export.no_report"))
             return
         self._load_result_graphs()
-        out_dir = QFileDialog.getExistingDirectory(self, "Папка для CSV", str(PROJECTS_DIR))
+        out_dir = QFileDialog.getExistingDirectory(self, t("export.csv_folder"), str(PROJECTS_DIR))
         if not out_dir:
             return
         out = Path(out_dir)
@@ -1517,27 +1658,21 @@ class MainWindow(QMainWindow):
             exported.append(p)
 
         if not exported:
-            QMessageBox.warning(self, "CSV", "Табличные данные не найдены в отчете.")
+            QMessageBox.warning(self, t("dialog.csv_title"), t("export.no_tables"))
             return
-        QMessageBox.information(self, "CSV", "Экспортировано:\n" + "\n".join(str(x) for x in exported))
+        QMessageBox.information(self, t("dialog.csv_title"), t("export.exported", list="\n".join(str(x) for x in exported)))
 
     def _on_export_png(self) -> None:
         if not self.graph_container or self.graph_container.count() == 0:
-            QMessageBox.warning(self, "PNG", "Нет графиков для экспорта.")
+            QMessageBox.warning(self, t("dialog.png_title"), t("export.no_graphs"))
             return
-        out_dir = QFileDialog.getExistingDirectory(self, "Папка для PNG", str(PROJECTS_DIR))
+        out_dir = QFileDialog.getExistingDirectory(self, t("export.png_folder"), str(PROJECTS_DIR))
         if not out_dir:
             return
         out = Path(out_dir)
         out.mkdir(parents=True, exist_ok=True)
 
-        export_all = QMessageBox.question(
-            self,
-            "PNG",
-            "Экспортировать все графики? (Нет = только текущий)",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes,
-        ) == QMessageBox.Yes
+        export_all = self._ask_yes_no("dialog.png_title", "export.confirm_all")
 
         targets = list(range(self.graph_container.count())) if export_all else [self.graph_container.currentIndex()]
         exported: list[Path] = []
@@ -1553,9 +1688,9 @@ class MainWindow(QMainWindow):
                 exported.append(p)
 
         if not exported:
-            QMessageBox.warning(self, "PNG", "Экспорт не выполнен.")
+            QMessageBox.warning(self, t("dialog.png_title"), t("export.failed"))
             return
-        QMessageBox.information(self, "PNG", "Экспортировано:\n" + "\n".join(str(x) for x in exported))
+        QMessageBox.information(self, t("dialog.png_title"), t("export.exported", list="\n".join(str(x) for x in exported)))
 
     # -------------------- TDF --------------------
     def _tdf_out_path(self) -> Path:
@@ -1583,19 +1718,19 @@ class MainWindow(QMainWindow):
             self.tdf_curve_picker.setCurrentIndex(0)
             self._show_tdf_curve(0)
         else:
-            self.tdf_status.setText("TDF: нет кривых. Нажмите 'Запустить TDF'.")
+            self._set_status(self.tdf_status, "tdf.status_no_curves")
             if self.tdf_plot:
                 self.tdf_plot.clear()
             if self.tdf_plot_label:
                 self.tdf_plot_label.setPixmap(QPixmap())
-                self.tdf_plot_label.setText("PNG-графики TDF не найдены. Нажмите 'Запустить TDF'.")
+                self._set_status(self.tdf_plot_label, "tdf.no_png_message")
 
     def _load_tdf_input_from_engine(self) -> None:
         src = self._tdf_input_path()
         if src.exists():
             txt = src.read_text(encoding="ascii", errors="replace")
             self.tdf_input_editor.setPlainText(txt)
-            self.tdf_status.setText("TDF: input загружен")
+            self._set_status(self.tdf_status, "tdf.status_input_loaded")
 
         # First run bootstrap for reset button.
         dflt = self._tdf_input_default_path()
@@ -1657,14 +1792,14 @@ class MainWindow(QMainWindow):
     def _on_tdf_mat_apply(self) -> None:
         r = self.tdf_mat_table.currentRow()
         if r < 0 or r >= len(self.tdf_deck.materials):
-            QMessageBox.warning(self, "TDF forms", "Выберите материал в таблице.")
+            QMessageBox.warning(self, t("dialog.tdf_forms_title"), t("dialog.tdf_select_material"))
             return
         m = self._tdf_material_from_form()
         if not m.code.strip():
-            QMessageBox.warning(self, "TDF forms", "Код материала не должен быть пустым.")
+            QMessageBox.warning(self, t("dialog.tdf_forms_title"), t("dialog.tdf_code_empty"))
             return
         if not m.nline.strip():
-            QMessageBox.warning(self, "TDF forms", "nline не должен быть пустым.")
+            QMessageBox.warning(self, t("dialog.tdf_forms_title"), t("dialog.tdf_nline_empty"))
             return
         self.tdf_deck.materials[r] = m
         self._refresh_tdf_mat_table()
@@ -1675,82 +1810,82 @@ class MainWindow(QMainWindow):
         txt = self.tdf_input_editor.toPlainText()
         ok, msg = self._validate_tdf_input_text(txt)
         if not ok:
-            QMessageBox.warning(self, "TDF forms", msg)
+            QMessageBox.warning(self, t("dialog.tdf_forms_title"), msg)
             return
         self.tdf_deck = parse_tdfdata_text(txt)
         errs = validate_tdf_deck(self.tdf_deck)
         self._refresh_tdf_mat_table()
         if errs:
-            self.tdf_status.setText(f"TDF forms: разобрано {len(self.tdf_deck.materials)} материалов, ошибок: {len(errs)}")
-            QMessageBox.warning(self, "TDF forms", "Найдены проблемы структуры:\n" + "\n".join(errs[:8]))
+            self._set_status(self.tdf_status, "tdf.status_forms_parsed_with_errors", n=len(self.tdf_deck.materials), e=len(errs))
+            QMessageBox.warning(self, t("dialog.tdf_forms_title"), t("dialog.tdf_struct_problems", errs="\n".join(errs[:8])))
         else:
-            self.tdf_status.setText(f"TDF forms: разобрано материалов {len(self.tdf_deck.materials)}")
+            self._set_status(self.tdf_status, "tdf.status_forms_parsed", n=len(self.tdf_deck.materials))
 
     def _on_tdf_struct_to_text(self) -> None:
         if not self.tdf_deck.materials:
-            QMessageBox.warning(self, "TDF forms", "Нет материалов для генерации.")
+            QMessageBox.warning(self, t("dialog.tdf_forms_title"), t("dialog.tdf_no_materials"))
             return
         errs = validate_tdf_deck(self.tdf_deck)
         if errs:
-            QMessageBox.warning(self, "TDF forms", "Исправьте ошибки перед генерацией:\n" + "\n".join(errs[:8]))
+            QMessageBox.warning(self, t("dialog.tdf_forms_title"), t("dialog.tdf_fix_errors", errs="\n".join(errs[:8])))
             return
         txt = render_tdfdata_text(self.tdf_deck)
         self.tdf_input_editor.setPlainText(txt)
-        self.tdf_status.setText("TDF forms: tdfdata сгенерирован из структурной формы")
+        self._set_status(self.tdf_status, "tdf.status_forms_generated")
 
     def _validate_tdf_input_text(self, text: str) -> tuple[bool, str]:
         if not text.strip():
-            return False, "tdfdata пуст."
+            return False, t("tdf.input_empty")
         # very lightweight sanity check for known deck style
         has_material_marker = ("***" in text) or ("O2  Diatomic" in text)
         if not has_material_marker:
-            return False, "В tdfdata не найдены заголовки материалов."
+            return False, t("tdf.input_no_headers")
         return True, ""
 
     def _on_tdf_open_input(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, "Открыть tdfdata", str(TDF_ENGINE_DIR))
+        path, _ = QFileDialog.getOpenFileName(self, t("tdf.dialog_open"), str(TDF_ENGINE_DIR))
         if not path:
             return
         p = Path(path)
         self.tdf_input_editor.setPlainText(p.read_text(encoding="ascii", errors="replace"))
         self.tdf_input_path.setText(str(p))
         self._on_tdf_struct_from_text()
-        self.tdf_status.setText(f"TDF input загружен из: {p}")
+        self._set_status(self.tdf_status, "tdf.status_input_loaded_from", path=str(p))
 
     def _on_tdf_save_input(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Сохранить tdfdata", str(TDF_ENGINE_DIR / "tdfdata.custom"))
+        path, _ = QFileDialog.getSaveFileName(self, t("tdf.dialog_save"), str(TDF_ENGINE_DIR / "tdfdata.custom"))
         if not path:
             return
         txt = self.tdf_input_editor.toPlainText()
         ok, msg = self._validate_tdf_input_text(txt)
         if not ok:
-            QMessageBox.warning(self, "TDF input", msg)
+            QMessageBox.warning(self, t("dialog.tdf_input_title"), msg)
             return
         Path(path).write_text(txt, encoding="ascii")
-        self.tdf_status.setText(f"TDF input сохранен: {path}")
+        self._set_status(self.tdf_status, "tdf.status_input_saved", path=path)
 
     def _on_tdf_apply_input(self) -> None:
         txt = self.tdf_input_editor.toPlainText()
         ok, msg = self._validate_tdf_input_text(txt)
         if not ok:
-            QMessageBox.warning(self, "TDF input", msg)
+            QMessageBox.warning(self, t("dialog.tdf_input_title"), msg)
             return
         self._tdf_input_path().write_text(txt, encoding="ascii")
         self._on_tdf_struct_from_text()
         self.tdf_input_path.setText(str(self._tdf_input_path()))
-        self.tdf_status.setText("TDF input применен в tdf_engine/tdfdata")
+        self._set_status(self.tdf_status, "tdf.status_input_applied")
 
     def _on_tdf_reset_input(self) -> None:
         dflt = self._tdf_input_default_path()
         if not dflt.exists():
-            QMessageBox.warning(self, "TDF input", "Исходный tdfdata.default не найден.")
+            QMessageBox.warning(self, t("dialog.tdf_input_title"), t("dialog.tdf_default_missing"))
             return
         txt = dflt.read_text(encoding="ascii", errors="replace")
         self.tdf_input_editor.setPlainText(txt)
         self._tdf_input_path().write_text(txt, encoding="ascii")
         self._on_tdf_struct_from_text()
         self.tdf_input_path.setText(str(self._tdf_input_path()))
-        self.tdf_status.setText("TDF input сброшен к исходному")
+        self._set_status(self.tdf_status, "tdf.status_input_reset")
 
     def _show_tdf_curve(self, idx: int) -> None:
         if idx < 0 or idx >= len(self.tdf_curves):
@@ -1762,18 +1897,19 @@ class MainWindow(QMainWindow):
             self.tdf_plot.setLabel("bottom", c.xlabel)
             self.tdf_plot.setLabel("left", c.ylabel)
             self.tdf_plot.plot(c.x, c.y, pen="y")
-            self.tdf_status.setText(f"TDF кривая {idx+1}/{len(self.tdf_curves)}: {c.title}")
+            self._set_status(self.tdf_status, "tdf.status_curve", i=idx + 1, n=len(self.tdf_curves), title=c.title)
         elif self.tdf_plot_label:
             image_path = self.tdf_plot_images[idx] if idx < len(self.tdf_plot_images) else None
             if image_path is None:
                 self.tdf_plot_label.setPixmap(QPixmap())
-                self.tdf_plot_label.setText(f"PNG-график для кривой не найден: {c.title}")
+                self._set_status(self.tdf_plot_label, "tdf.no_png_for_curve", title=c.title)
             else:
                 pixmap = QPixmap(str(image_path))
                 if pixmap.isNull():
                     self.tdf_plot_label.setPixmap(QPixmap())
-                    self.tdf_plot_label.setText(f"Не удалось открыть PNG-график: {image_path}")
+                    self._set_status(self.tdf_plot_label, "tdf.png_open_failed", path=str(image_path))
                 else:
+                    self._dyn_status.pop(id(self.tdf_plot_label), None)
                     self.tdf_plot_label.setText("")
                     self.tdf_plot_label.setPixmap(
                         pixmap.scaled(
@@ -1782,7 +1918,7 @@ class MainWindow(QMainWindow):
                             Qt.TransformationMode.SmoothTransformation,
                         )
                     )
-            self.tdf_status.setText(f"TDF PNG {idx+1}/{len(self.tdf_curves)}: {c.title}")
+            self._set_status(self.tdf_status, "tdf.status_curve_png", i=idx + 1, n=len(self.tdf_curves), title=c.title)
 
     def _on_tdf_curve_changed(self, idx: int) -> None:
         self._show_tdf_curve(idx)
@@ -1803,18 +1939,18 @@ class MainWindow(QMainWindow):
 
     def _on_run_tdf(self) -> None:
         if self._active_tdf_task is not None:
-            QMessageBox.information(self, "TDF", "TDF уже выполняется.")
+            QMessageBox.information(self, t("dialog.tdf_title"), t("dialog.tdf_already"))
             return
         # Always use the current editor text for run.
         txt = self.tdf_input_editor.toPlainText()
         ok, msg = self._validate_tdf_input_text(txt)
         if not ok:
-            QMessageBox.warning(self, "TDF input", msg)
+            QMessageBox.warning(self, t("dialog.tdf_input_title"), msg)
             return
         deck = parse_tdfdata_text(txt)
         errs = validate_tdf_deck(deck)
         if errs:
-            QMessageBox.warning(self, "TDF input", "Ошибка структуры TDF:\n" + "\n".join(errs[:10]))
+            QMessageBox.warning(self, t("dialog.tdf_input_title"), t("dialog.tdf_struct_error", errs="\n".join(errs[:10])))
             return
         self.tdf_deck = deck
         self._refresh_tdf_mat_table()
@@ -1822,7 +1958,7 @@ class MainWindow(QMainWindow):
 
         self.btn_tdf_run.setEnabled(False)
         self.btn_tdf_cancel.setEnabled(True)
-        self.tdf_status.setText("TDF: выполняется...")
+        self._set_status(self.tdf_status, "tdf.status_running")
         self.tdf_log.clear()
 
         task = TdfTask(self.tdf_runner)
@@ -1835,17 +1971,17 @@ class MainWindow(QMainWindow):
 
     def _on_cancel_tdf(self) -> None:
         self.tdf_runner.cancel()
-        self.tdf_status.setText("TDF: запрос на отмену отправлен.")
+        self._set_status(self.tdf_status, "tdf.status_cancel_requested")
 
     def _on_tdf_progress(self, pct: int, msg: str) -> None:
-        self.tdf_status.setText(f"{msg} ({int(pct)}%)")
+        self._set_status(self.tdf_status, "calc.status_running_progress", phase_key=msg, pct=int(pct))
 
     def _on_tdf_failed(self, msg: str) -> None:
         self._active_tdf_task = None
         self.btn_tdf_run.setEnabled(True)
         self.btn_tdf_cancel.setEnabled(False)
-        self.tdf_status.setText("TDF: ошибка")
-        QMessageBox.critical(self, "TDF", msg)
+        self._set_status(self.tdf_status, "tdf.status_error")
+        QMessageBox.critical(self, t("dialog.tdf_title"), msg)
 
     def _on_tdf_finished(self, rc: int) -> None:
         self._active_tdf_task = None
@@ -1853,9 +1989,9 @@ class MainWindow(QMainWindow):
         self.btn_tdf_cancel.setEnabled(False)
         if rc != 0:
             if rc == 124:
-                self.tdf_status.setText("TDF: прерван по таймауту")
+                self._set_status(self.tdf_status, "tdf.status_timeout")
             else:
-                self.tdf_status.setText(f"TDF: завершен с ошибкой {rc}")
+                self._set_status(self.tdf_status, "tdf.status_failed", rc=rc)
             return
-        self.tdf_status.setText("TDF: завершен успешно")
+        self._set_status(self.tdf_status, "tdf.status_done")
         self._load_tdf_curves()

@@ -50,7 +50,7 @@ class CalcRunner:
             emit(f"RUN: in-process {mode} input={bkwdata_path} output={report_path}")
             emit(f"timeout_sec={int(deadline)}")
             if on_progress:
-                on_progress(2, "Запуск процесса")
+                on_progress(2, "calc.runner.starting")
 
             timeout_timer.start()
             try:
@@ -72,9 +72,9 @@ class CalcRunner:
             emit(f"exit_code={rc}")
             if on_progress:
                 if rc == 0:
-                    on_progress(100, "Завершено")
+                    on_progress(100, "calc.runner.done")
                 elif rc == 124:
-                    on_progress(0, "Отменено")
+                    on_progress(0, "calc.runner.cancelled")
                 else:
-                    on_progress(0, "Завершено с ошибкой")
+                    on_progress(0, "calc.runner.failed")
             return rc

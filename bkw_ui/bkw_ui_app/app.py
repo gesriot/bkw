@@ -13,11 +13,15 @@ def run() -> int:
         print("  python -m pip install -r bkw_ui/requirements.txt")
         return 2
 
-    from .paths import ensure_dirs
+    from .i18n import i18n
+    from .paths import APP_NAME, ensure_dirs
     from .ui.main_window import MainWindow
 
     ensure_dirs()
     app = QApplication([])
+    app.setOrganizationName(APP_NAME)
+    app.setApplicationName(APP_NAME)
+    i18n.load_from_settings()
     w = MainWindow()
     w.show()
     return app.exec()

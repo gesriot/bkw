@@ -28,13 +28,7 @@ This project is an independent Python port of the BKW-family programs distribute
 
 ## Quick start
 
-Install from the repository root:
-
-```bash
-pip install -e .
-```
-
-Or with `uv`:
+Install dependencies from the repository root:
 
 ```bash
 uv sync
@@ -43,20 +37,14 @@ uv sync
 Launch the desktop UI:
 
 ```bash
-bkw-ui
-```
-
-With `uv`, use:
-
-```bash
 uv run bkw-ui
 ```
 
 Or the CLIs:
 
 ```bash
-python -m bkw_py.userbkw --template CHNO --mix "rdx=60,tnt=40" --output BKWDATA
-python -m bkw_py.bkw --input BKWDATA --output bkw.out
+uv run python -m bkw_py.userbkw --template CHNO --mix "rdx=60,tnt=40" --output BKWDATA
+uv run python -m bkw_py.bkw --input BKWDATA --output bkw.out
 ```
 
 See the per-component READMEs for full reference.

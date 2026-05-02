@@ -61,28 +61,16 @@ The application solves three tasks:
 - `pyqtgraph >= 0.13`
 - `matplotlib >= 3.10`
 
-Install from the repository root:
-
-```bash
-pip install -e .
-```
-
-Or using `uv`:
+Install dependencies from the repository root:
 
 ```bash
 uv sync
 ```
 
-Run:
+Run the desktop UI from source:
 
 ```bash
-python bkw_ui/main.py
-```
-
-Or via the installed entry point:
-
-```bash
-bkw-ui
+uv run bkw-ui
 ```
 
 If you already have a packaged build, just launch `BKW.exe` (Windows), `BKW.app` (macOS) or `BKW.dist/BKW` (Linux) directly.
@@ -387,7 +375,7 @@ If graphs are empty:
 Generate BKWDATA:
 
 ```bash
-python -m bkw_py.userbkw --template CHNO --mix rdx=100 --output BKWDATA
+uv run python -m bkw_py.userbkw --template CHNO --mix rdx=100 --output BKWDATA
 ```
 
 For an ISP-compatible deck, add `--set-ioeq 2`.
@@ -395,21 +383,21 @@ For an ISP-compatible deck, add `--set-ioeq 2`.
 BKW:
 
 ```bash
-python -m bkw_py.bkw --input BKWDATA --output bkw.out
+uv run python -m bkw_py.bkw --input BKWDATA --output bkw.out
 ```
 
 ISP:
 
 ```bash
-python -m bkw_py.userbkw --template CHNO --mix rdx=100 --set-ioeq 2 --output BKWDATA
-python -m bkw_py.ispbkw --input BKWDATA --output isp.out
+uv run python -m bkw_py.userbkw --template CHNO --mix rdx=100 --set-ioeq 2 --output BKWDATA
+uv run python -m bkw_py.ispbkw --input BKWDATA --output isp.out
 ```
 
 TDF (run from the directory with `tdfdata`):
 
 ```bash
 cd bkw_ui/tdf_engine
-python -m bkw_py.tdf
+uv run python -m bkw_py.tdf
 ```
 
 ## 17. Building the application

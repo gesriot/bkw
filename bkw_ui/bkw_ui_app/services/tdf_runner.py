@@ -46,7 +46,7 @@ class TdfRunner:
             emit(f"RUN: in-process tdf working_dir={TDF_ENGINE_DIR}")
             emit(f"timeout_sec={int(deadline)}")
             if on_progress is not None:
-                on_progress(2, "Запуск TDF")
+                on_progress(2, "tdf.runner.starting")
 
             timeout_timer.start()
             try:
@@ -63,9 +63,9 @@ class TdfRunner:
             emit(f"exit_code={rc}")
             if on_progress is not None:
                 if rc == 0:
-                    on_progress(100, "TDF завершен")
+                    on_progress(100, "tdf.runner.done")
                 elif rc == 124:
-                    on_progress(0, "TDF отменен")
+                    on_progress(0, "tdf.runner.cancelled")
                 else:
-                    on_progress(0, "TDF завершен с ошибкой")
+                    on_progress(0, "tdf.runner.failed")
             return rc
