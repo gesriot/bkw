@@ -2,7 +2,7 @@
 
 Desktop application for preparing `BKWDATA`, running `BKW`/`ISPBKW` calculations and working with `TDF` from a single window.
 
-The current UI labels are Russian. This README uses English section names, and shows the exact Russian labels where that helps match the window.
+The UI is bilingual: English by default, switchable to Russian via the `Language` menu (the choice persists across launches via `QSettings`). The scenarios below cite the Russian labels for users on the Russian locale; in English the same controls have direct equivalents (e.g. `1. Project` for `1. Проект`, `Run calculation` for `Запустить расчет`).
 
 ## Quick start
 

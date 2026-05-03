@@ -57,7 +57,7 @@ def test_ui_e2e_smoke_bkw_generate_run_export(monkeypatch):
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(out_export))
 
         # Project source/template.
-        w.source_mode_combo.setCurrentText("template")
+        w._combo_set_by_data(w.source_mode_combo, "template")
         if w.template_combo.findText("CHNO") >= 0:
             w.template_combo.setCurrentText("CHNO")
 
@@ -87,7 +87,8 @@ def test_ui_e2e_smoke_bkw_generate_run_export(monkeypatch):
         ok = _wait_until(app, lambda: w.btn_run.isEnabled(), timeout_sec=120.0)
         assert ok, "calculation did not finish in time"
         assert out_report.exists(), "report should be generated"
-        assert "завершен" in w.calc_status.text().lower()
+        state = w._dyn_status.get(id(w.calc_status))
+        assert state is not None and state[1] == "calc.status_finished", w.calc_status.text()
 
         # Graphs/text should be loaded after run.
         if w.graph_container is not None:
@@ -129,7 +130,7 @@ def test_ui_e2e_smoke_isp_generate_run_export(monkeypatch):
         monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(out_export))
 
-        w.source_mode_combo.setCurrentText("template")
+        w._combo_set_by_data(w.source_mode_combo, "template")
         if w.template_combo.findText("CHNO") >= 0:
             w.template_combo.setCurrentText("CHNO")
 
@@ -153,7 +154,8 @@ def test_ui_e2e_smoke_isp_generate_run_export(monkeypatch):
         ok = _wait_until(app, lambda: w.btn_run.isEnabled(), timeout_sec=120.0)
         assert ok, "isp calculation did not finish in time"
         assert out_report.exists()
-        assert "завершен" in w.calc_status.text().lower()
+        state = w._dyn_status.get(id(w.calc_status))
+        assert state is not None and state[1] == "calc.status_finished", w.calc_status.text()
 
         if w.graph_container is not None:
             assert w.graph_container.count() >= 1
@@ -208,7 +210,7 @@ def test_ui_e2e_smoke_import_bkwdata_run_export(monkeypatch):
         monkeypatch.setattr(QFileDialog, "getExistingDirectory", lambda *a, **k: str(out_export))
 
         # Import mode should allow run flow without filling mix table.
-        w.source_mode_combo.setCurrentText("import")
+        w._combo_set_by_data(w.source_mode_combo, "import")
         w.input_bkwdata_edit.setText(str(src_bkwdata))
         w.project.source_mode = "import"
         w.project.source_bkwdata = str(src_bkwdata)
@@ -223,7 +225,8 @@ def test_ui_e2e_smoke_import_bkwdata_run_export(monkeypatch):
         ok = _wait_until(app, lambda: w.btn_run.isEnabled(), timeout_sec=120.0)
         assert ok, "import/bkw calculation did not finish in time"
         assert out_report.exists()
-        assert "завершен" in w.calc_status.text().lower()
+        state = w._dyn_status.get(id(w.calc_status))
+        assert state is not None and state[1] == "calc.status_finished", w.calc_status.text()
 
         # Export tables after run.
         w._on_export_csv()
@@ -252,7 +255,7 @@ def test_ui_e2e_corner_custom_species_solids_legacy(monkeypatch):
         monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: QMessageBox.Ok)
         monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
 
-        w.source_mode_combo.setCurrentText("template")
+        w._combo_set_by_data(w.source_mode_combo, "template")
         if w.template_combo.findText("CHNO") >= 0:
             w.template_combo.setCurrentText("CHNO")
 
@@ -326,7 +329,7 @@ def test_ui_e2e_corner_many_solids_with_legacy(monkeypatch):
         monkeypatch.setattr(QMessageBox, "warning", lambda *a, **k: QMessageBox.Ok)
         monkeypatch.setattr(QMessageBox, "critical", lambda *a, **k: QMessageBox.Ok)
 
-        w.source_mode_combo.setCurrentText("template")
+        w._combo_set_by_data(w.source_mode_combo, "template")
         if w.template_combo.findText("CHNO") >= 0:
             w.template_combo.setCurrentText("CHNO")
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 
+from ..i18n import t
+
 
 @dataclass
 class TdfMaterial:
@@ -131,28 +133,33 @@ def validate_tdf_deck(deck: TdfDeck) -> list[str]:
     }
 
     for i, m in enumerate(deck.materials, start=1):
-        tag = f"Материал #{i} ({m.code or '?'} {m.name or ''})".strip()
+        tag = t("tdf.validate.tag", i=i, code=m.code or "?", name=m.name or "").strip()
         if m.marker not in {"***", "O2"}:
-            errors.append(f"{tag}: недопустимый marker '{m.marker}'.")
+            errors.append(t("tdf.validate.bad_marker", tag=tag, marker=m.marker))
         if m.marker == "***" and not m.code.strip():
-            errors.append(f"{tag}: пустой код материала.")
+            errors.append(t("tdf.validate.empty_code", tag=tag))
         if not m.nline.strip():
-            errors.append(f"{tag}: пустой nline.")
+            errors.append(t("tdf.validate.empty_nline", tag=tag))
             continue
 
         nline = _parse_nline(m.nline)
         if nline is None:
-            errors.append(f"{tag}: nline должен быть целым числом (получено '{m.nline}').")
+            errors.append(t("tdf.validate.nline_not_int", tag=tag, nline=m.nline))
             continue
         if nline not in min_nonempty_by_nline:
-            errors.append(f"{tag}: неподдерживаемый nline={nline} (ожидается 1..5).")
+            errors.append(t("tdf.validate.nline_unsupported", tag=tag, nline=nline))
             continue
 
         body_nonempty = [ln for ln in m.body_lines if ln.strip()]
         if len(body_nonempty) < min_nonempty_by_nline[nline]:
             errors.append(
-                f"{tag}: для nline={nline} нужно минимум {min_nonempty_by_nline[nline]} непустых строк body, "
-                f"сейчас {len(body_nonempty)}."
+                t(
+                    "tdf.validate.body_too_short",
+                    tag=tag,
+                    nline=nline,
+                    needed=min_nonempty_by_nline[nline],
+                    got=len(body_nonempty),
+                )
             )
             continue
 
@@ -160,9 +167,9 @@ def validate_tdf_deck(deck: TdfDeck) -> list[str]:
         # 1) composition/mass-like row
         # 2) temperature range row
         if not re.search(r"\d", body_nonempty[0]):
-            errors.append(f"{tag}: первая строка body должна содержать числовые параметры.")
+            errors.append(t("tdf.validate.body_row1_no_numbers", tag=tag))
         if not re.search(r"\d", body_nonempty[1]):
-            errors.append(f"{tag}: вторая строка body должна содержать диапазон температур.")
+            errors.append(t("tdf.validate.body_row2_no_temp", tag=tag))
 
         # For nline 2/3 main gas forms, require an order/config row in body.
         if nline in {2, 3}:
@@ -170,6 +177,6 @@ def validate_tdf_deck(deck: TdfDeck) -> list[str]:
                 re.fullmatch(r"\s*[+-]?\d+(?:\.\d*)?\s+[+-]?\d+\s*(?:[+-]?\d+\s*)*$", ln) for ln in body_nonempty
             )
             if not has_order_row:
-                errors.append(f"{tag}: не найдена обязательная строка порядка/конфигурации для nline={nline}.")
+                errors.append(t("tdf.validate.no_order_row", tag=tag, nline=nline))
 
     return errors

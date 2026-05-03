@@ -799,11 +799,15 @@ class MainWindow(QMainWindow):
     def _refresh_project_info(self) -> None:
         if not hasattr(self, "project_info"):
             return
+        source_key = f"project.source.{self.project.source_mode}"
+        source_label = t(source_key)
+        if source_label == source_key:
+            source_label = self.project.source_mode
         self.project_info.setText(
             t(
                 "project.info",
                 name=self.project.name,
-                source=self.project.source_mode,
+                source=source_label,
                 template=self.project.template,
                 input=self.project.source_bkwdata or "-",
             )
