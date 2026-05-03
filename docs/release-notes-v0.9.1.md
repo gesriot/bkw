@@ -28,6 +28,8 @@ This release focuses on desktop UI localization and release packaging updates.
 
 - Progress/status messages now store stable translation keys instead of already-rendered text, so in-flight statuses update correctly after switching languages.
 - PNG export confirmation now uses localized `Yes` / `No` buttons in Russian mode.
+- Legacy solid twin mappings are now applied after custom solid species are added, so custom solids can receive twin names.
+- ISP template flow now auto-selects `ioeq=2` when `isp` mode is chosen, and ISP runs validate that the selected `BKWDATA` is prepared for ISP mode before launching.
 
 ## Notes
 

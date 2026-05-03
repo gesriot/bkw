@@ -5,6 +5,14 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
+
+REFERENCE_ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.skipif(
+    not (REFERENCE_ROOT / "bkw").exists() or not (REFERENCE_ROOT / "ispbkw").exists(),
+    reason="reference Fortran tree absent",
+)
 
 RE_E = r"[+-]?\d\.\d+E[+-]\d+"
 RE_6E_ROW = re.compile(rf"^\s*{RE_E}\s+{RE_E}\s+{RE_E}\s+{RE_E}\s+{RE_E}\s+{RE_E}\s*$")

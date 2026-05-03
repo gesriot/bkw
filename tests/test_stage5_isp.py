@@ -5,6 +5,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 
 RE_BLOCK = re.compile(
     r"THE CHAMBER OR EXHAUST PRESSURE IS\s*([+-]?\d\.\d+E[+-]\d+)\s+BARS.*?"
@@ -12,6 +14,13 @@ RE_BLOCK = re.compile(
     r"The Temperature is\s*([+-]?\d\.\d+E[+-]\d+)\s+degrees Kelvin.*?"
     r"The Computed\s+Volume\s*([+-]?\d\.\d+E[+-]\d+)\s+cc/gm of propellant",
     re.S,
+)
+
+
+REFERENCE_ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.skipif(
+    not (REFERENCE_ROOT / "ispbkw").exists(),
+    reason="reference Fortran tree absent",
 )
 
 

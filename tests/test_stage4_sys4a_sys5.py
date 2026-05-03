@@ -4,10 +4,18 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from bkw_py.core.detonation import sys3, sys4a, sys5
 from bkw_py.core.equil import Sys1State
 from bkw_py.io.bkwdata import load_bkwdata
 
+
+REFERENCE_ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.skipif(
+    not (REFERENCE_ROOT / "bkw").exists(),
+    reason="reference Fortran tree absent",
+)
 
 RE_HUG_BLOCK = re.compile(
     r"Pressure\s*=\s*([+-]?\d\.\d+E[+-]\d+)\s+Volume\s*=\s*([+-]?\d\.\d+E[+-]\d+)\s+"

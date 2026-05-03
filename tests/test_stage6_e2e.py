@@ -5,6 +5,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 
 RE_BKW_CJ_P = re.compile(r"The Computed CJ Pressure is\s+([+-]?\d\.\d+E[+-]\d+)")
 RE_BKW_CJ_T = re.compile(r"The Computed CJ Temperature is\s+([+-]?\d\.\d+E[+-]\d+)")
@@ -16,6 +18,13 @@ RE_ISP_BLOCK = re.compile(
     r"The Temperature is\s*([+-]?\d\.\d+E[+-]\d+)\s+degrees Kelvin.*?"
     r"The Computed\s+Volume\s*([+-]?\d\.\d+E[+-]\d+)\s+cc/gm of propellant",
     re.S,
+)
+
+
+REFERENCE_ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.skipif(
+    not (REFERENCE_ROOT / "bkw").exists() or not (REFERENCE_ROOT / "ispbkw").exists(),
+    reason="reference Fortran tree absent",
 )
 
 

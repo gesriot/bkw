@@ -12,6 +12,14 @@ from bkw_py.core.equil import Sys1State, sys1
 from bkw_py.io.bkwdata import load_bkwdata, save_bkwdata
 
 
+REFERENCE_ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.skipif(
+    not (REFERENCE_ROOT / "bkw").exists()
+    or not (REFERENCE_ROOT / "ispbkw").exists()
+    or not (REFERENCE_ROOT / "userbkw").exists(),
+    reason="reference Fortran tree absent",
+)
+
 RE_CJ_PRESS = re.compile(r"The Computed CJ Pressure is\s+([+-]?\d\.\d+E[+-]\d+)")
 RE_CJ_TEMP = re.compile(r"The Computed CJ Temperature is\s+([+-]?\d\.\d+E[+-]\d+)")
 RE_GAS = re.compile(
