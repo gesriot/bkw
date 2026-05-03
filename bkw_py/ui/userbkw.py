@@ -1159,7 +1159,6 @@ def run_cli(argv: list[str] | None = None) -> int:
     if args.legacy_aispr is not None:
         d.aispr = float(args.legacy_aispr)
     _apply_legacy_constants(d, args.legacy_var)
-    _apply_legacy_solid_twins(d, args.legacy_solid_twin)
 
     if args.mix:
         mix_entries = parse_mix_spec(args.mix)
@@ -1207,6 +1206,9 @@ def run_cli(argv: list[str] | None = None) -> int:
     for spec in args.add_solid_custom:
         name, therc, soleq, comp = _parse_custom_solid_spec(spec)
         add_solid_species(d, name=name, therc=therc, soleq=soleq, composition=comp)
+
+    # Apply twin remap after all solids (template + db + custom) are present.
+    _apply_legacy_solid_twins(d, args.legacy_solid_twin)
 
     if args.interactive:
         d = interactive_cli(d, db)

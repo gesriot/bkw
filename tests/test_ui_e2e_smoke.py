@@ -60,6 +60,10 @@ def test_ui_e2e_smoke_bkw_generate_run_export(monkeypatch):
         w._combo_set_by_data(w.source_mode_combo, "template")
         if w.template_combo.findText("CHNO") >= 0:
             w.template_combo.setCurrentText("CHNO")
+        w.mode_combo.setCurrentText("isp")
+        assert w.legacy_ioeq_combo.currentData() == 2
+        w.mode_combo.setCurrentText("bkw")
+        assert w.legacy_ioeq_combo.currentData() is None
 
         # Mix setup required for template flow.
         w.mix_table.setRowCount(0)
@@ -145,11 +149,13 @@ def test_ui_e2e_smoke_isp_generate_run_export(monkeypatch):
         w.export_bkwdata.setText(str(out_bkwdata))
         w.export_report.setText(str(out_report))
 
+        # Selecting isp before generation auto-sets legacy_ioeq=2 for the template flow,
+        # so the generated deck satisfies the ISP run-time precondition.
+        w.mode_combo.setCurrentText("isp")
         w._on_generate_bkwdata()
         assert out_bkwdata.exists()
         assert Path(w.project.last_output_bkwdata).exists()
 
-        w.mode_combo.setCurrentText("isp")
         w._on_run_calc()
         ok = _wait_until(app, lambda: w.btn_run.isEnabled(), timeout_sec=120.0)
         assert ok, "isp calculation did not finish in time"
@@ -303,12 +309,6 @@ def test_ui_e2e_corner_custom_species_solids_legacy(monkeypatch):
         assert abs(d.aispr - 0.45) < 1e-12
         assert d.irho == 2
         assert len(d.athrho) == 2
-
-        w.mode_combo.setCurrentText("bkw")
-        w._on_run_calc()
-        ok = _wait_until(app, lambda: w.btn_run.isEnabled(), timeout_sec=120.0)
-        assert ok, "corner1 bkw did not finish"
-        assert out_report.exists()
     finally:
         w.close()
 

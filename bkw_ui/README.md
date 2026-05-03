@@ -2,43 +2,43 @@
 
 Desktop application for preparing `BKWDATA`, running `BKW`/`ISPBKW` calculations and working with `TDF` from a single window.
 
-The UI is bilingual: English by default, switchable to Russian via the `Language` menu (the choice persists across launches via `QSettings`). The scenarios below cite the Russian labels for users on the Russian locale; in English the same controls have direct equivalents (e.g. `1. Project` for `1. Проект`, `Run calculation` for `Запустить расчет`).
+The UI is bilingual: English by default, switchable to Russian via the `Language` menu (the choice persists across launches via `QSettings`). All labels referenced in this README are the English defaults.
 
 ## Quick start
 
 ### Scenario A – calculate from an existing `BKWDATA`
 
-1. Tab `1. Проект`:
-   - `Источник входа = import`
-   - point `Входной BKWDATA` to your file
-2. Tab `4. Расчет`:
-   - choose `Режим` (`bkw` or `isp`)
-   - press `Запустить расчет`
-3. Tab `5. Результаты` – review report text and graphs
-4. Tab `6. Экспорт` – `Экспорт CSV` and/or `Экспорт PNG`
+1. Tab `1. Project`:
+   - `Input source = import`
+   - point `Input BKWDATA` to your file
+2. Tab `4. Calculation`:
+   - choose `Mode` (`bkw` or `isp`)
+   - press `Run calculation`
+3. Tab `5. Results` – review report text and graphs
+4. Tab `6. Export` – `Export CSV` and/or `Export PNG`
 
 ### Scenario B – calculate from a template
 
-1. Tab `1. Проект`:
-   - `Источник входа = template`
-   - pick `Шаблон BKWDATA`
-2. Tab `2. Смесь`:
+1. Tab `1. Project`:
+   - `Input source = template`
+   - pick `BKWDATA template`
+2. Tab `2. Mixture`:
    - add components (name + value > 0)
-   - press `Применить в проект`
+   - press `Apply to project`
 3. Tab `3. Species` (optional): add `gas/solid db`, custom species, legacy
    fields
-4. Tab `4. Расчет`:
-   - `Сгенерировать BKWDATA`
-   - `Запустить расчет`
+4. Tab `4. Calculation`:
+   - `Generate BKWDATA`
+   - `Run calculation`
 
-For an `isp` run generated from a template, set `Legacy page1: ioeq` to `2` before generating `BKWDATA`; `ispbkw` accepts only ISP-mode decks.
+For an `isp` run generated from a template, switch `Mode` to `isp` before generating `BKWDATA` — the UI then auto-selects `Legacy page1: ioeq = isp (2)` for you. `ispbkw` accepts only ISP-mode decks; if the imported deck has a different `ioeq`, the run is refused with a clear message.
 
 ### Scenario C – TDF
 
 1. Tab `7. TDF`:
    - edit `tdfdata` (as text or via the structured form)
-   - `Применить в tdf_engine`
-2. Press `Запустить TDF`
+   - `Apply to tdf_engine`
+2. Press `Run TDF`
 3. Browse the curves (`Prev`/`Next` or the dropdown)
 
 ## 1. Purpose

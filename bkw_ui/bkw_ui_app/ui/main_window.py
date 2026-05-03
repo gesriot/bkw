@@ -118,6 +118,8 @@ class MainWindow(QMainWindow):
 
         self._tr_setters: list = []
         self._dyn_status: dict[int, tuple] = {}
+        self._auto_ioeq2_active = False
+        self._auto_ioeq2_previous = None
 
         self.thread_pool = QThreadPool.globalInstance()
         self.runner = CalcRunner()
@@ -320,6 +322,7 @@ class MainWindow(QMainWindow):
         self.legacy_ioeq_combo.addItem("inherit", None)
         self.legacy_ioeq_combo.addItem("equilibrium (0)", 0)
         self.legacy_ioeq_combo.addItem("frozen (1)", 1)
+        self.legacy_ioeq_combo.addItem("isp (2)", 2)
         grid.addWidget(self._tr_label("project.legacy_ioeq"), 4, 0)
         grid.addWidget(self.legacy_ioeq_combo, 4, 1)
 
@@ -509,6 +512,19 @@ class MainWindow(QMainWindow):
         self.btn_generate_bkwdata.clicked.connect(self._on_generate_bkwdata)
         self.btn_run.clicked.connect(self._on_run_calc)
         self.btn_cancel.clicked.connect(self._on_cancel_calc)
+        self.mode_combo.currentTextChanged.connect(self._on_mode_changed)
+
+    def _on_mode_changed(self, value: str) -> None:
+        source_mode = self.source_mode_combo.currentData() or "template"
+        if value == "isp" and source_mode == "template":
+            if self.legacy_ioeq_combo.currentData() != 2:
+                self._auto_ioeq2_previous = self.legacy_ioeq_combo.currentData()
+                self._combo_set_by_data(self.legacy_ioeq_combo, 2)
+                self._auto_ioeq2_active = True
+            return
+        if self._auto_ioeq2_active and self.legacy_ioeq_combo.currentData() == 2:
+            self._combo_set_by_data(self.legacy_ioeq_combo, self._auto_ioeq2_previous)
+        self._auto_ioeq2_active = False
 
     def _build_results_tab(self) -> None:
         lay = QVBoxLayout(self.tab_results)
@@ -1042,10 +1058,10 @@ class MainWindow(QMainWindow):
 
     def _validate_species_fields(self) -> tuple[bool, str, dict]:
         self._normalize_legacy_from_widgets()
-        ok, msg, gas_db, ctx = self._parse_db_tokens(self.gas_db_edit.text(), label="Add gas db", widget_key="gas_db")
+        ok, msg, gas_db, ctx = self._parse_db_tokens(self.gas_db_edit.text(), label=t("species.gas_db_short"), widget_key="gas_db")
         if not ok:
             return False, msg, ctx
-        ok, msg, solid_db, ctx = self._parse_db_tokens(self.solid_db_edit.text(), label="Add solid db", widget_key="solid_db")
+        ok, msg, solid_db, ctx = self._parse_db_tokens(self.solid_db_edit.text(), label=t("species.solid_db_short"), widget_key="solid_db")
         if not ok:
             return False, msg, ctx
 
@@ -1241,6 +1257,14 @@ class MainWindow(QMainWindow):
         if not bkw.exists():
             return False, t("v.bkwdata_run_missing", bkw=str(bkw)), {}
         self.project.last_output_bkwdata = str(bkw)
+        if mode == "isp":
+            try:
+                from bkw_py.io.bkwdata import load_bkwdata as _load
+                ioeq = int(_load(bkw).ioeq)
+            except Exception:
+                ioeq = -1
+            if ioeq != 2:
+                return False, t("v.isp_requires_ioeq2", ioeq=ioeq), {"mode": True}
         report = self._abs_path(self.export_report.text().strip() or str(PROJECTS_DIR / ("bkw.out" if mode == "bkw" else "isp.out")))
         if str(report).strip() == "":
             return False, t("v.report_path_missing"), {"report": True}

@@ -80,6 +80,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "species.legacy_twins_placeholder": "e.g.:\nsol c=graph",
         "species.legacy_twins_tooltip": "Each line: old=new. old — solid name from nam, new — second name/twin.",
         "species.btn_apply": "Apply species params",
+        "species.gas_db_short": "Add gas db",
+        "species.solid_db_short": "Add solid db",
 
         # Calc tab
         "calc.mode_label": "Mode",
@@ -288,6 +290,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "v.report_path_missing": "Report path not specified.",
         "v.report_conflict": "Path conflict: report must not overwrite the BKWDATA file.",
         "v.report_dir_create": "Failed to create report directory: {exc}",
+        "v.isp_requires_ioeq2": "ISP run requires BKWDATA with ioeq=2 (current: {ioeq}). For template flow set 'Legacy page1: ioeq' to 'isp (2)' and regenerate; for an imported deck choose one prepared in ISP mode.",
     },
     "ru": {
         # Menu
@@ -360,6 +363,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "species.legacy_twins_placeholder": "например:\nsol c=graph",
         "species.legacy_twins_tooltip": "Каждая строка: old=new. old — имя solid из nam, new — second name/twin.",
         "species.btn_apply": "Применить species-параметры",
+        "species.gas_db_short": "Add gas db",
+        "species.solid_db_short": "Add solid db",
 
         # Calc tab
         "calc.mode_label": "Режим",
@@ -568,5 +573,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "v.report_path_missing": "Не задан путь для отчета.",
         "v.report_conflict": "Конфликт путей: отчет не должен записываться в файл BKWDATA.",
         "v.report_dir_create": "Не удалось создать каталог отчета: {exc}",
+        "v.isp_requires_ioeq2": "Для запуска ISP нужен BKWDATA с ioeq=2 (сейчас: {ioeq}). Для template-режима выставьте 'Legacy page1: ioeq' в 'isp (2)' и перегенерируйте; для импортированного deck выберите файл, подготовленный в ISP-режиме.",
     },
 }

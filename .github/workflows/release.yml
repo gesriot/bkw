@@ -40,6 +40,7 @@ jobs:
         with:
           name: bkw-macos
           path: dist/*.dmg
+          if-no-files-found: error
 
   windows:
     name: Windows EXE
@@ -112,6 +113,7 @@ jobs:
         with:
           name: bkw-linux
           path: dist/*linux*.tar.gz
+          if-no-files-found: error
 
   release:
     name: GitHub Release
