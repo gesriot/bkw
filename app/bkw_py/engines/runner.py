@@ -17,7 +17,7 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
 from bkw_py._cancel import CancelledError
 
@@ -134,9 +134,10 @@ def run_in_dir(
     on_log: Callable[[str], None] | None = None,
     cancel_event: threading.Event | None = None,
     timeout_sec: float | None = None,
+    extra_engine_dirs: Iterable[str | Path] | None = None,
 ) -> int:
     """Run ``engine`` in ``workdir``; its inputs/outputs already live there."""
-    exe = resolve_engine(engine)
+    exe = resolve_engine(engine, extra_dirs=extra_engine_dirs)
     return _run_process(
         exe, Path(workdir), on_log=on_log, cancel_event=cancel_event, timeout_sec=timeout_sec
     )

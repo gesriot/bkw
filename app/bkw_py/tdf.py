@@ -380,7 +380,7 @@ def run(
     from bkw_py.engines import run_in_dir
 
     wd = Path(working_dir)
-    rc = run_in_dir("abtdf", workdir=wd, on_log=on_log, cancel_event=cancel_event)
+    rc = run_in_dir("abtdf", workdir=wd, on_log=on_log, cancel_event=cancel_event, extra_engine_dirs=[wd])
     if rc == 0:
         try:
             _generate_plots_from_out(wd, on_log)

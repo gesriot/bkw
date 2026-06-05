@@ -35,12 +35,20 @@ $env:MPLCONFIGDIR = if ($env:MPLCONFIGDIR) { $env:MPLCONFIGDIR } else { Join-Pat
 $BuildEnvPath = Join-Path $RootDir $BuildEnv
 $OutputPath = Join-Path $RootDir $OutputDir
 $BinDir = Join-Path $RootDir "bin"
+$EnginePayloadDir = Join-Path $RootDir ".build-venv/engine-payload"
 
 foreach ($engine in @("abbkw.exe", "abispbkw.exe", "abtdf.exe", "userbkw.exe")) {
     $path = Join-Path $BinDir $engine
     if (-not (Test-Path $path)) {
         throw "Missing bundled engine: $path"
     }
+}
+
+Write-Host "==> Staging engine payload"
+Remove-Item -Recurse -Force $EnginePayloadDir -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $EnginePayloadDir | Out-Null
+foreach ($engine in @("abbkw", "abispbkw", "abtdf")) {
+    Copy-Item -LiteralPath (Join-Path $BinDir "$engine.exe") -Destination (Join-Path $EnginePayloadDir "$engine.bin") -Force
 }
 
 Write-Host "==> Creating build environment: $BuildEnvPath"
@@ -94,6 +102,7 @@ $NuitkaArgs = @(
     "--include-package-data=numpy",
     "--include-data-dir=$BinDir=bin",
     "--include-data-dir=$RootDir/bkw_ui/tdf_engine=tdf_engine",
+    "--include-data-dir=$EnginePayloadDir=engine_payload",
     "--assume-yes-for-downloads",
     "--lto=$Lto",
     "--python-flag=-O",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -38,3 +39,25 @@ def test_frozen_macos_paths_are_writable_user_locations(monkeypatch, tmp_path):
     assert module.PROJECTS_DIR.is_dir()
     assert (module.TDF_ENGINE_DIR / "tdfdata").read_text(encoding="ascii") == "sample tdfdata"
     assert (module.TDF_ENGINE_DIR / "tdfdata.default").read_text(encoding="ascii") == "sample default"
+
+
+def test_engine_resolver_extracts_packaged_payload(monkeypatch, tmp_path):
+    from bkw_py.engines.paths import resolve_engine
+
+    payload_dir = tmp_path / "engine_payload"
+    payload_dir.mkdir()
+    (payload_dir / "payloadtest.bin").write_bytes(b"payload engine")
+    runtime_root = tmp_path / "runtime"
+
+    monkeypatch.setenv("BKW_ENGINE_PAYLOAD_DIR", str(payload_dir))
+    if sys.platform == "win32":
+        monkeypatch.setenv("LOCALAPPDATA", str(runtime_root))
+    else:
+        monkeypatch.setenv("XDG_DATA_HOME", str(runtime_root))
+
+    exe = resolve_engine("payloadtest")
+
+    expected_name = "payloadtest.exe" if sys.platform == "win32" else "payloadtest"
+    assert exe == runtime_root / "BKW" / "bin" / expected_name
+    assert exe.read_bytes() == b"payload engine"
+    assert os.access(exe, os.X_OK)
